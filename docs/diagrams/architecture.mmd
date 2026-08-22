@@ -1,0 +1,26 @@
+graph TD
+    A[TI IWR6843ISK<br/>mmWave Radar] -->|Raw Binary Telemetry Stream| B(mmWaveICBoost Carrier)
+    B -->|UART Polling| C[STM32 Real-Time Coprocessor<br/>Arduino UNO Q]
+    
+    subgraph Arduino UNO Q Processing
+    C1[Triple TLV Parser]
+    C2[Point Cloud Type 1]
+    C3[Target List Type 1010]
+    C4[Vitals Type 1040]
+    C5[On-device Bounding Box Pruning<br/>Drops out-of-zone points]
+    C6[Defensive Caps & Sanity Checks]
+    
+    C --> C1
+    C1 --> C2 & C3 & C4
+    C2 --> C5
+    C3 --> C5
+    C5 --> C6
+    C4 --> C6
+    end
+    
+    C6 -->|3 Compact Bridge Channels<br/>radar_targets / radar_vitals / radar_pointcloud| D[Linux Application MPU]
+    
+    style A fill:#0052cc,color:#fff
+    style B fill:#172b4d,color:#fff
+    style C fill:#00875a,color:#fff
+    style D fill:#ff5630,color:#fff
