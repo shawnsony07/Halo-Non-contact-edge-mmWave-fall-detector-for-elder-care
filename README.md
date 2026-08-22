@@ -17,34 +17,7 @@ This repository contains the hardware integration, edge-processing logic, and ma
 
 The Halo system architecture is distributed across three primary compute tiers: the Radar Sensor, the Real-Time Coprocessor, and the Linux Application MPU.
 
-```mermaid
-graph TD
-    A[TI IWR6843ISK<br/>mmWave Radar] -->|Raw Binary Telemetry Stream| B(mmWaveICBoost Carrier)
-    B -->|UART Polling| C[STM32 Real-Time Coprocessor<br/>Arduino UNO Q]
-    
-    subgraph Arduino UNO Q Processing
-    C1[Triple TLV Parser]
-    C2[Point Cloud Type 1]
-    C3[Target List Type 1010]
-    C4[Vitals Type 1040]
-    C5[On-device Bounding Box Pruning<br/>Drops out-of-zone points]
-    C6[Defensive Caps & Sanity Checks]
-    
-    C --> C1
-    C1 --> C2 & C3 & C4
-    C2 --> C5
-    C3 --> C5
-    C5 --> C6
-    C4 --> C6
-    end
-    
-    C6 -->|3 Compact Bridge Channels<br/>radar_targets / radar_vitals / radar_pointcloud| D[Linux Application MPU]
-    
-    style A fill:#0052cc,color:#fff
-    style B fill:#172b4d,color:#fff
-    style C fill:#00875a,color:#fff
-    style D fill:#ff5630,color:#fff
-```
+![System Architecture](docs/diagrams/architecture.png)
 
 ### 1. Hardware Stack
 
@@ -66,37 +39,7 @@ The telemetry is formatted using Type-Length-Value (TLV) packets. The MCU implem
 2.  **Target List (Type 1010):** Returns the tracked targets, handled by the IWR6843's on-chip grouping and tracking algorithms.
 3.  **Vitals (Type 1040):** Returns pre-calculated, filtered heart rate and respiration rate values.
 
-```mermaid
-sequenceDiagram
-    participant Radar as TI IWR6843
-    participant MCU as Arduino UNO Q (STM32)
-    participant MPU as Linux MPU
-    
-    loop Real-Time Telemetry Stream
-        Radar->>MCU: Serial UART Stream
-        Note over MCU: Polled UART ingestion (Not DMA)
-        MCU->>MCU: Parse Magic Word & Packet Header
-        MCU->>MCU: Validate packet-length sanity bounds
-        
-        par Point Cloud (TLV 1)
-            MCU->>MCU: Extract (X, Y, Z, Velocity)
-            MCU->>MCU: Bounding-box pruning
-        and Target List (TLV 1010)
-            MCU->>MCU: Extract Target Track Data
-            MCU->>MCU: Bounding-box pruning
-        and Vitals (TLV 1040)
-            MCU->>MCU: Extract pre-computed Heart/Breath Rate
-        end
-        
-        MCU->>MCU: Enforce max points/TLV & max TLVs/frame
-        
-        par bridge_channels
-            MCU->>MPU: radar_pointcloud
-            MCU->>MPU: radar_targets
-            MCU->>MPU: radar_vitals
-        end
-    end
-```
+![Data Pipeline & Telemetry](docs/diagrams/data_flow.png)
 
 ### Spatial Filtering and Defensive Bounds
 
@@ -110,40 +53,7 @@ Because edge MPUs have limited resources, the MCU implements physical world cons
 
 The downstream Linux application (implemented in Python) acts as the brain of the edge device. To ensure real-time latency, it uses a 4-Thread architecture.
 
-```mermaid
-flowchart LR
-    subgraph Linux Application MPU - 4-Thread Architecture
-    
-    subgraph Thread 1: Spatial Engine
-    T1[Consume radar_targets<br/>or radar_pointcloud]
-    T1_task[Handle Tracker Data / Custom Clustering]
-    T1 --> T1_task
-    end
-    
-    subgraph Thread 2: Activity Classifier
-    T2[Consume radar_pointcloud]
-    T2_task[Rolling-window tensor<br/>Fed to PyTorch Model]
-    T2 --> T2_task
-    end
-    
-    subgraph Thread 3: Vitals Consumer
-    T3[Consume radar_vitals]
-    T3_task[Format & Threshold<br/>Heart/Breath Rates]
-    T3 --> T3_task
-    end
-    
-    subgraph Thread 4: Router & Dashboard
-    T4[Event Aggregator]
-    T4_task[Transport Layer<br/>MQTT/WebSockets/HTTP]
-    T4 --> T4_task
-    end
-    
-    end
-    
-    T1_task -->|Spatial Events| T4
-    T2_task -->|Fall Detection Events| T4
-    T3_task -->|Vitals Alerts| T4
-```
+![Linux Application MPU Architecture](docs/diagrams/process_threads.png)
 
 ### Thread Breakdown
 
