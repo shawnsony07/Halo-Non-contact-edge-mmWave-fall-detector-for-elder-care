@@ -12,18 +12,13 @@ scene: !include scenes.yaml
 mqtt:
   sensor:
     - name: "Radar Heart Rate"
-      state_topic: "eldercare/radar/vitals"
-      value_template: "{{ value_json.heart_rate }}"
+      state_topic: "eldercare/radar/heart_rate"
       unit_of_measurement: "bpm"
       icon: "mdi:heart-pulse"
-
     - name: "Radar Breath Rate"
-      state_topic: "eldercare/radar/vitals"
-      value_template: "{{ value_json.breath_rate }}"
+      state_topic: "eldercare/radar/breath_rate"
       unit_of_measurement: "bpm"
       icon: "mdi:lungs"
-
     - name: "Fall Probability"
-      state_topic: "eldercare/radar/falls"
-      value_template: "{{ value_json.probability }}"
+      state_topic: "eldercare/radar/fall_probability"
       icon: "mdi:alert-circle"
