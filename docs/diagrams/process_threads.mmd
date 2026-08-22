@@ -1,0 +1,32 @@
+flowchart LR
+    subgraph Linux Application MPU - 4-Thread Architecture
+    
+    subgraph Thread 1: Spatial Engine
+    T1[Consume radar_targets<br/>or radar_pointcloud]
+    T1_task[Handle Tracker Data / Custom Clustering]
+    T1 --> T1_task
+    end
+    
+    subgraph Thread 2: Activity Classifier
+    T2[Consume radar_pointcloud]
+    T2_task[Rolling-window tensor<br/>Fed to PyTorch Model]
+    T2 --> T2_task
+    end
+    
+    subgraph Thread 3: Vitals Consumer
+    T3[Consume radar_vitals]
+    T3_task[Format & Threshold<br/>Heart/Breath Rates]
+    T3 --> T3_task
+    end
+    
+    subgraph Thread 4: Router & Dashboard
+    T4[Event Aggregator]
+    T4_task[Transport Layer<br/>MQTT/WebSockets/HTTP]
+    T4 --> T4_task
+    end
+    
+    end
+    
+    T1_task -->|Spatial Events| T4
+    T2_task -->|Fall Detection Events| T4
+    T3_task -->|Vitals Alerts| T4

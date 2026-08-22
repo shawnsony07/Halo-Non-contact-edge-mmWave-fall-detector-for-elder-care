@@ -1,0 +1,29 @@
+sequenceDiagram
+    participant Radar as TI IWR6843
+    participant MCU as Arduino UNO Q (STM32)
+    participant MPU as Linux MPU
+    
+    loop Real-Time Telemetry Stream
+        Radar->>MCU: Serial UART Stream
+        Note over MCU: Polled UART ingestion (Not DMA)
+        MCU->>MCU: Parse Magic Word & Packet Header
+        MCU->>MCU: Validate packet-length sanity bounds
+        
+        par Point Cloud (TLV 1)
+            MCU->>MCU: Extract (X, Y, Z, Velocity)
+            MCU->>MCU: Bounding-box pruning
+        and Target List (TLV 1010)
+            MCU->>MCU: Extract Target Track Data
+            MCU->>MCU: Bounding-box pruning
+        and Vitals (TLV 1040)
+            MCU->>MCU: Extract pre-computed Heart/Breath Rate
+        end
+        
+        MCU->>MCU: Enforce max points/TLV & max TLVs/frame
+        
+        par bridge_channels
+            MCU->>MPU: radar_pointcloud
+            MCU->>MPU: radar_targets
+            MCU->>MPU: radar_vitals
+        end
+    end
