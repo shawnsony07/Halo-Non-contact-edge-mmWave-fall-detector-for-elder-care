@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/images/logo.jpg" alt="Halo Logo" width="160"/>
+</p>
+
 # Halo: Non-Contact Edge mmWave Fall Detector for Elder Care
 
 Halo is a privacy-first, non-contact monitoring system designed for elder care facilities and private homes. By leveraging high-frequency mmWave radar technology, it provides highly accurate fall detection, presence tracking, and vital signs monitoring without the use of invasive cameras or wearable devices. 
@@ -155,7 +159,81 @@ The downstream Linux application (implemented in Python) acts as the brain of th
 *   **Thread 1: Spatial Engine:** Consumes the `radar_targets` channel. Uses the pre-tracked target lists from the TI chip, or performs custom DBSCAN/K-Means clustering on the `radar_pointcloud` if the on-chip tracker loses confidence.
 *   **Thread 2: Activity Classifier:** Consumes the `radar_pointcloud` channel. Aggregates data into a rolling-window time-series tensor. This tensor is fed into the PyTorch Neural Network (`fall_model.pth`) to classify activities and trigger Fall Detection alerts.
 *   **Thread 3: Vitals Consumer:** Consumes the `radar_vitals` channel. The phase-shift algorithms run on the TI radar, so this thread is purely responsible for smoothing, formatting, and thresholding critical heart and breath rate deviations.
-*   **Thread 4: Router & Dashboard:** The event aggregator and transport layer. Publishes the serialized events (falls, vital spikes, presence) to a local dashboard or an external MQTT/HTTP server.
+*   **Thread 4: Router & Dashboard:** The event aggregator and transport layer. All events are appended to a local `events.jsonl` log file (the black box). Critical events are then dispatched over two transports:
+    *   **MQTT** — Fall probability scores publish to `eldercare/radar/falls`; vitals anomalies publish to `eldercare/radar/vitals`. A local Mosquitto broker (see `homeassistant/`) subscribes and feeds these into Home Assistant sensors.
+    *   **Webhook** — Falls with `p > 0.85` and all vitals alerts trigger an HTTP POST to the configured Home Assistant webhook endpoint (`/api/webhook/emergency_dispatch`).
+
+---
+
+## 🏠 Home Assistant & Dashboard Integration
+
+The `homeassistant/` directory contains a complete, self-contained stack for deploying the Halo dashboard using **Docker Compose**. It runs two containers side-by-side: a Home Assistant instance and a Mosquitto MQTT broker.
+
+### Directory Structure
+
+```text
+homeassistant/
+├── docker-compose.yml          # Orchestrates HA + Mosquitto containers
+├── config/
+│   ├── configuration.yaml      # HA core config: MQTT sensors + includes
+│   ├── automations.yaml        # Placeholder for HA automations
+│   ├── scripts.yaml            # Placeholder for HA scripts
+│   ├── scenes.yaml             # Placeholder for HA scenes
+│   └── secrets.yaml            # Secret store (do NOT commit real secrets)
+└── mosquitto/
+    └── config/
+        └── mosquitto.conf      # Mosquitto broker config
+```
+
+### 1. Running the Stack
+
+Ensure Docker and Docker Compose are installed, then from the `homeassistant/` directory:
+
+```bash
+cd homeassistant
+docker compose up -d
+```
+
+Home Assistant will be available at `http://<host-ip>:8123`.
+
+### 2. Mosquitto MQTT Broker
+
+The broker is configured in [`mosquitto/config/mosquitto.conf`](homeassistant/mosquitto/config/mosquitto.conf):
+
+| Setting | Value |
+|---|---|
+| Port | `1883` |
+| Authentication | Anonymous (open — use on a trusted LAN only) |
+| Persistence | Enabled — data stored in `/mosquitto/data/` |
+| Logging | File — `/mosquitto/log/mosquitto.log` |
+
+> [!WARNING]
+> `allow_anonymous true` is set for ease of local development. For a production elder-care deployment, enable password authentication in `mosquitto.conf` and update `secrets.yaml` accordingly.
+
+### 3. Home Assistant MQTT Sensors
+
+The [`config/configuration.yaml`](homeassistant/config/configuration.yaml) pre-defines three sensors that subscribe to the MQTT topics published by Thread 4 of `main.py`:
+
+| Sensor | MQTT Topic | Value Template | Unit |
+|---|---|---|---|
+| Radar Heart Rate | `eldercare/radar/vitals` | `value_json.heart_rate` | bpm |
+| Radar Breath Rate | `eldercare/radar/vitals` | `value_json.breath_rate` | bpm |
+| Fall Probability | `eldercare/radar/falls` | `value_json.probability` | — |
+
+### 4. Connecting the MPU to Home Assistant
+
+In `src/mpu_linux/main.py`, update the following constants to match your network:
+
+```python
+# Thread 4 -- Event Router (src/mpu_linux/main.py)
+WEBHOOK_URL    = "http://<HA_HOST_IP>:8123/api/webhook/emergency_dispatch"
+MQTT_BROKER_IP = "<HA_HOST_IP>"   # same machine running docker compose
+MQTT_PORT      = 1883
+```
+
+Once set, fall detections and vitals alerts flow automatically into Home Assistant:
+- Fall alerts (`fall_cnn`, `p > 0.85`) → webhook POST + `eldercare/radar/falls` MQTT
+- Vitals alerts (sustained zero breath rate) → webhook POST + `eldercare/radar/vitals` MQTT
 
 ---
 
@@ -181,7 +259,13 @@ The project has been refactored into a highly modular directory structure:
 
 ```text
 ├── docs/
-│   └── diagrams/             # High-resolution Mermaid diagrams
+│   ├── diagrams/             # High-resolution Mermaid diagrams
+│   └── images/               # Hardware photos and pinout diagrams
+├── homeassistant/
+│   ├── docker-compose.yml    # Docker stack: Home Assistant + Mosquitto
+│   ├── config/               # Home Assistant configuration (sensors, automations)
+│   └── mosquitto/
+│       └── config/           # Mosquitto broker configuration
 ├── model_training/
 │   ├── data/                 # Raw datasets and pointcloud captures
 │   └── notebooks/            # Jupyter notebooks (e.g., FallDetection.ipynb)
