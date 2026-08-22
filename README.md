@@ -81,14 +81,33 @@ The project has been refactored into a highly modular directory structure:
 
 ## ⚙️ Model Training & AI
 
-The Fall Detection model is a PyTorch-based sequence classifier. 
+The Fall Detection model is a PyTorch-based sequence classifier (`MyCNN`).
+
+### PyTorch Tensor Specifics
+The model expects a 4D input tensor formatted from the accumulated point cloud data:
+*   **Shape:** `(Batch_Size, Frames, Max_Objects, 4)`
+*   **Features (4):** Each tracked point contains `(X, Y, Z, Doppler_Velocity)`.
+*   During inference, the rolling-window tensor is gathered, padded to the maximum detected objects per frame, and passed to `fall_model.pth` to yield a binary Fall/Not-Fall prediction.
+
 *   **Notebook:** Located at `model_training/notebooks/FallDetection_root.ipynb`.
 *   **Weights:** The production weights are saved as `src/mpu_linux/fall_model.pth`.
 *   **Data:** Training datasets are stored in `model_training/data/GatheredData`.
 
 ## 🚀 Setup and Deployment
 
-### 1. Arduino MCU Setup
+### 1. Arduino MCU Setup & Wiring
+
+**Hardware Connections (Arduino UNO Q to IWR6843ISK / mmWaveICBoost):**
+*   **Power & Ground:**
+    *   **UNO Q GND** $\rightarrow$ **Header J5 Pin 4 (GND)** (Mandatory common ground reference for UART signal integrity).
+    *   *Note:* The mmWaveICBoost should use its dedicated 5V power source, isolated from the Arduino power logic.
+*   **Configuration UART (115200 baud):**
+    *   **UNO Q D0 (USART1_RX)** $\rightarrow$ **Header J5 Pin 3 (RS232TX)**: Transmits data from the radar out to the Arduino's MCU receive pin.
+    *   **UNO Q D1 (USART1_TX)** $\rightarrow$ **Header J5 Pin 5 (RS232RX)**: Transmits configuration and commands from the Arduino out to the radar's receive pin.
+*   **High-Speed Data UART (921600 baud):**
+    *   **UNO Q RX (Hardware Serial)** $\rightarrow$ **Header J6 Pin 9 (Data TX)**: Dedicated telemetry stream for high-throughput TLV packets (Type 1010 targets, Type 1 point cloud, and Type 1040 vitals).
+
+**Flashing the Arduino:**
 1. Open `src/mcu_arduino/sketch.ino` in the Arduino IDE.
 2. Select your STM32 / Arduino UNO Q board configuration.
 3. Flash the firmware to enable the TLV parser and bridge channels.
@@ -108,6 +127,47 @@ The Fall Detection model is a PyTorch-based sequence classifier.
    ```
 
 *(Ensure the Arduino is connected via USB/Serial and the port is correctly mapped in `main.py`).*
+
+## Hardware Setup & Radar Configuration
+
+This project requires a Texas Instruments mmWave Radar (specifically the **IWR6843ISK** or **IWR6843AOP**). We utilize the "Vital Signs with People Tracking" firmware to extract raw point cloud data, tracker target lists, and vital signs in a single unified data stream.
+
+### 1. Prerequisites & Downloads
+Before starting, ensure you have the following downloaded and installed:
+1. **TI Radar Toolbox**: Download the `radar_toolbox_3_30_00_06` (or latest) from the [TI Resource Explorer](https://dev.ti.com/tirex/explore/node?node=A__AGTrhNyWt.K9.J.Z8F0KkA__radar_toolbox__1.00.01.07). Extract this to your `C:\ti\` folder.
+2. **TI UniFlash**: Download and install [UniFlash](https://www.ti.com/tool/UNIFLASH) to write the firmware to the radar.
+3. **USB Drivers**: Ensure the Silicon Labs CP210x USB to UART Bridge VCP Drivers are installed so your PC can communicate with the radar.
+
+### 2. Flashing the Firmware
+The radar must be flashed with the pre-built binary included in the TI Toolbox.
+
+1. **Set to Flashing Mode**: Set the physical SOP switches on the radar carrier board (e.g., MMWAVEICBOOST or ICB) to Flashing Mode. *(Typically, this means setting SOP0 and SOP2 to ON, but check your specific carrier board's datasheet).*
+2. **Connect to PC**: Plug the radar into your PC via USB and provide power.
+3. **Open UniFlash**:
+   * Select your device as `IWR6843ISK` (or AOP depending on your hardware).
+   * Go to Settings and select the **Enhanced COM Port** (find the port number in Windows Device Manager).
+4. **Select Binary**: Navigate to the Program tab. For the Meta Image 1, browse to your TI folder and select the vital signs binary:
+   * `C:\ti\radar_toolbox_3_30_00_06\radar_toolbox_3_30_00_06\source\ti\examples\Industrial_and_Personal_Electronics\Vital_Signs\Vital_Signs_With_People_Tracking\prebuilt_binaries\vital_signs_tracking_6843ISK_demo.bin`
+5. **Flash**: Click `Load Image`. Wait for the "Success" message.
+6. **Set to Functional Mode**: Disconnect power, flip the SOP switches back to Functional Mode *(Typically SOP0 ON, SOP2 OFF)*, and power the radar back on.
+
+### 3. Understanding the COM Ports
+When plugged via USB, the radar enumerates as two separate COM ports in your Device Manager:
+* **CFG_PORT (Enhanced COM Port):** Operates at `115200` baud. Used to send the `.cfg` file text commands to the radar to start the sensor.
+* **DATA_PORT (Standard COM Port):** Operates at `921600` baud. Used by the radar to blast the binary TLV (Type-Length-Value) packets containing the point cloud, tracker, and vital signs data back to the PC.
+
+### 4. Configuring and Getting Data
+To tell the radar to start broadcasting data, you must send it a configuration file over the CFG_PORT.
+
+**The Config File:**
+We use the `vital_signs_ISK_6m.cfg` file, located here:
+`C:\ti\radar_toolbox_3_30_00_06\radar_toolbox_3_30_00_06\source\ti\examples\Industrial_and_Personal_Electronics\Vital_Signs\Vital_Signs_With_People_Tracking\chirp_configs\`
+
+**Starting the Data Stream:**
+You have two options to send this config and view the data:
+
+* **Option A (GUI Visualizer):** Run the Industrial Visualizer executable located in the radar toolbox at `\tools\visualizers\Industrial_Visualizer`. Select the correct COM ports, select the "Vital Signs with People Tracking" lab, load the `vital_signs_ISK_6m.cfg` file, and click Start.
+* **Option B (Python Script):** When running our custom Python data collection script, you will specify the COM port numbers and the path to `vital_signs_ISK_6m.cfg`. The script opens the CFG_PORT, reads the `.cfg` file line-by-line, and sends it to the radar. Immediately after, it opens the DATA_PORT to capture the incoming point cloud and vital signs streams for ML processing.
 
 ---
 *Developed for elder care environments demanding the highest degree of privacy, dignity, and reliability.*
