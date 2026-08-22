@@ -138,7 +138,7 @@ This project requires a Texas Instruments **IWR6843ISK** mmWave Radar mounted on
 
 ### 1. Prerequisites & Downloads
 Before starting, ensure you have the following downloaded and installed:
-1. **TI Radar Toolbox**: Download `radar_toolbox_3_30_00_06` (or the latest) from the [TI Resource Explorer](https://dev.ti.com/tirex/explore/node?node=A__AGTrhNyWt.K9.J.Z8F0KkA__radar_toolbox__1.00.01.07). Extract this to your `C:\ti\` folder.
+1. **TI Radar Toolbox**: Download `radar_toolbox_3_30_00_06` (or the latest) from the [TI Resource Explorer](https://dev.ti.com/tirex/explore/node?node=A__AEIJm0rwIeU.2P1OBWwlaA__radar_toolbox__1AslXXD__LATEST). Extract this to your `C:\ti\` folder.
 2. **TI UniFlash**: Download and install [UniFlash](https://www.ti.com/tool/UNIFLASH) to write the firmware to the radar.
 3. **XDS110 Drivers**: Because you are using the MMWAVEICBOOST, you need the TI XDS110 drivers (these are usually installed automatically when you install UniFlash).
 
