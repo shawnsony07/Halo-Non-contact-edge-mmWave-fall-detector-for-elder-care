@@ -133,6 +133,7 @@ The model expects a 4D input tensor formatted from the accumulated point cloud d
 ## Hardware Setup & Radar Configuration
 
 ![IWR6843ISK](docs/images/iwr6843isk.png)
+![MMWAVEICBOOST](docs/images/mmwaveicboost.png)
 
 This project requires a Texas Instruments **IWR6843ISK** mmWave Radar mounted on the **MMWAVEICBOOST** carrier board for connecting via UART and other communication interfaces. We utilize the "Vital Signs with People Tracking" firmware to extract raw point cloud data, tracker target lists, and vital signs in a single unified data stream.
 
