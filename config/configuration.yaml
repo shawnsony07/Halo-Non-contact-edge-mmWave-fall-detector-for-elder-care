@@ -1,0 +1,29 @@
+
+# Loads default set of integrations. Do not remove.
+default_config:
+
+# Load frontend themes from the themes folder
+frontend:
+  themes: !include_dir_merge_named themes
+
+automation: !include automations.yaml
+script: !include scripts.yaml
+scene: !include scenes.yaml
+mqtt:
+  sensor:
+    - name: "Radar Heart Rate"
+      state_topic: "eldercare/radar/vitals"
+      value_template: "{{ value_json.heart_rate }}"
+      unit_of_measurement: "bpm"
+      icon: "mdi:heart-pulse"
+
+    - name: "Radar Breath Rate"
+      state_topic: "eldercare/radar/vitals"
+      value_template: "{{ value_json.breath_rate }}"
+      unit_of_measurement: "bpm"
+      icon: "mdi:lungs"
+
+    - name: "Fall Probability"
+      state_topic: "eldercare/radar/falls"
+      value_template: "{{ value_json.probability }}"
+      icon: "mdi:alert-circle"
