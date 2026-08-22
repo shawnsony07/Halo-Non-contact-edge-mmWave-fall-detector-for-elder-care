@@ -259,6 +259,13 @@ def run_classifier_if_ready():
         # "ran, said not-fall" look identical from the console.
         print(f"[Thread2] Window classified: {'FALL' if is_fall else 'not fall'} (p={prob:.3f})")
 
+        # Push every probability, not just the >0.85 emergency spike -- HA's
+        # gauge needs a continuous stream to plot, not sparse rare events.
+        # The emergency-dispatch webhook logic (Thread 4) still gates on
+        # is_fall/prob>0.85 separately -- this doesn't change that threshold,
+        # just adds the missing continuous feed alongside it.
+        push_event("fall_probability", {"probability": prob})
+
         if is_fall:
             push_event("fall_cnn", {"source": "pointcloud_classifier", "probability": prob})
     except Exception as e:
@@ -363,6 +370,12 @@ def thread_vitals_consumer():
 
                 print(f"[Vitals] ID {vid} -> Heart Rate: {heart_rate:.1f} bpm | Breath Rate: {breath_rate:.1f} bpm | Breath Dev: {breath_dev:.3f}")
 
+                # Every valid reading gets pushed, not just alert thresholds --
+                # HA's heart-rate/breath-rate entities need a continuous stream
+                # to show anything other than "Unknown". This was the actual
+                # bug: only the rare vitals_alert event was ever published.
+                push_event("vitals_reading", {"id": vid, "heart_rate": heart_rate, "breath_rate": breath_rate})
+
                 now = time.time()
                 if breath_rate > 1.0:
                     _last_nonzero_breath[vid] = now
@@ -390,17 +403,29 @@ EVENTS_LOG_FILE = "python/events.jsonl"
 _recent_events_lock = threading.Lock()
 
 # Configuration (Update these with your actual local IPs when ready)
-WEBHOOK_URL = "http://192.168.1.X:8123/api/webhook/emergency_dispatch"
-MQTT_BROKER_IP = "192.168.1.X" 
+# NOTE: 127.0.0.1 will NOT work here -- this app runs in its own Docker
+# container (radar_fall_detection-main-1), separate from the mosquitto and
+# homeassistant containers. Loopback means "this container", not the host
+# or the other containers. Use the HOST MACHINE's real LAN IP (run
+# `hostname -I` on the host to find it) since mosquitto's port is published
+# there, not reachable via any container's own 127.0.0.1.
+WEBHOOK_URL = "http://192.168.1.15:8123/api/webhook/emergency_dispatch"
+MQTT_BROKER_IP = "192.168.1.15"
 MQTT_PORT = 1883
 MQTT_TOPIC_FALL = "eldercare/radar/falls"
 MQTT_TOPIC_VITALS = "eldercare/radar/vitals"
+MQTT_TOPIC_HEART_RATE = "eldercare/radar/heart_rate"
+MQTT_TOPIC_BREATH_RATE = "eldercare/radar/breath_rate"
+MQTT_TOPIC_FALL_PROBABILITY = "eldercare/radar/fall_probability"
 
 def thread_event_router():
     print("[Thread4] Event Router active -- pushing MQTT and Webhooks.")
-    
-    # Setup MQTT Client
-    mqtt_client = mqtt.Client(client_id="arduino_radar_edge")
+
+    # VERSION2 -- VERSION1 still triggered the deprecation warning on the
+    # installed paho-mqtt version, so this is the non-deprecated choice.
+    # Safe here since no on_connect/on_message callbacks are registered
+    # that would need the new callback signature.
+    mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="arduino_radar_edge")
     try:
         mqtt_client.connect(MQTT_BROKER_IP, MQTT_PORT, 60)
         mqtt_client.loop_start()
@@ -410,7 +435,7 @@ def thread_event_router():
 
     while True:
         event = event_queue.get()
-        
+
         # 1. Permanent Local Logging (The Black Box)
         with _recent_events_lock:
             try:
@@ -421,16 +446,33 @@ def thread_event_router():
 
         # 2. Routing Logic
         event_type = event.get("type")
-        
-        if event_type == "fall_cnn":
+
+        if event_type == "vitals_reading":
+            # Bare numeric payloads -- HA's basic MQTT sensor casts the raw
+            # payload to a number directly. A JSON blob here is exactly what
+            # produced the "Entity is non-numeric" errors.
+            try:
+                mqtt_client.publish(MQTT_TOPIC_HEART_RATE, event["heart_rate"])
+                mqtt_client.publish(MQTT_TOPIC_BREATH_RATE, event["breath_rate"])
+            except Exception:
+                pass
+
+        elif event_type == "fall_probability":
+            try:
+                mqtt_client.publish(MQTT_TOPIC_FALL_PROBABILITY, event["probability"])
+            except Exception:
+                pass
+
+        elif event_type == "fall_cnn":
             prob = event.get("probability", 0.0)
-            
-            # Publish all runs to MQTT for dashboard plotting
+
+            # Full JSON blob stays here -- this topic is for logging/history,
+            # not a bare-number HA entity.
             try:
                 mqtt_client.publish(MQTT_TOPIC_FALL, json.dumps(event))
             except Exception:
-                pass 
-                
+                pass
+
             # Emergency Dispatch Rule: > 85% Confidence
             if prob > 0.85:
                 print(f"[Thread4] CRITICAL FALL DETECTED (p={prob:.3f}). Dispatching webhook!")
