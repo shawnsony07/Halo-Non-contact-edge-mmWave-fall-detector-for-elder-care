@@ -160,8 +160,8 @@ The downstream Linux application (implemented in Python) acts as the brain of th
 *   **Thread 2: Activity Classifier:** Consumes the `radar_pointcloud` channel. Aggregates data into a rolling-window time-series tensor. This tensor is fed into the PyTorch Neural Network (`fall_model.pth`) to classify activities and trigger Fall Detection alerts.
 *   **Thread 3: Vitals Consumer:** Consumes the `radar_vitals` channel. The phase-shift algorithms run on the TI radar, so this thread is purely responsible for smoothing, formatting, and thresholding critical heart and breath rate deviations.
 *   **Thread 4: Router & Dashboard:** The event aggregator and transport layer. All events are appended to a local `events.jsonl` log file (the black box). Critical events are then dispatched over two transports:
-    *   **MQTT** — Fall probability scores publish to `eldercare/radar/falls`; vitals anomalies publish to `eldercare/radar/vitals`. A local Mosquitto broker (see `homeassistant/`) subscribes and feeds these into Home Assistant sensors.
-    *   **Webhook** — Falls with `p > 0.85` and all vitals alerts trigger an HTTP POST to the configured Home Assistant webhook endpoint (`/api/webhook/emergency_dispatch`).
+    *   **MQTT** — Three dedicated topics carry live numeric payloads: `eldercare/radar/heart_rate`, `eldercare/radar/breath_rate`, and `eldercare/radar/fall_probability`. A fourth topic (`eldercare/radar/falls`) carries full JSON blobs for fall history logging. A local Mosquitto broker (see `homeassistant/`) subscribes and feeds these directly into Home Assistant sensors.
+    *   **Webhook** — Falls with `p > 0.85` and all vitals alerts trigger an HTTP POST to the Home Assistant webhook endpoint (`/api/webhook/emergency_dispatch`), where an automation dispatches HA persistent notifications and **ntfy push notifications** to your phone.
 
 ---
 
@@ -176,7 +176,7 @@ homeassistant/
 ├── docker-compose.yml          # Orchestrates HA + Mosquitto containers
 ├── config/
 │   ├── configuration.yaml      # HA core config: MQTT sensors + includes
-│   ├── automations.yaml        # Placeholder for HA automations
+│   ├── automations.yaml        # Emergency dispatch: fall + vitals webhook → ntfy push
 │   ├── scripts.yaml            # Placeholder for HA scripts
 │   ├── scenes.yaml             # Placeholder for HA scenes
 │   └── secrets.yaml            # Secret store (do NOT commit real secrets)
@@ -212,28 +212,47 @@ The broker is configured in [`mosquitto/config/mosquitto.conf`](homeassistant/mo
 
 ### 3. Home Assistant MQTT Sensors
 
-The [`config/configuration.yaml`](homeassistant/config/configuration.yaml) pre-defines three sensors that subscribe to the MQTT topics published by Thread 4 of `main.py`:
+The [`config/configuration.yaml`](homeassistant/config/configuration.yaml) pre-defines three sensors. Each subscribes to its own dedicated topic carrying a **bare numeric value** (not JSON) — this is required for HA to cast the payload as a number:
 
-| Sensor | MQTT Topic | Value Template | Unit |
-|---|---|---|---|
-| Radar Heart Rate | `eldercare/radar/vitals` | `value_json.heart_rate` | bpm |
-| Radar Breath Rate | `eldercare/radar/vitals` | `value_json.breath_rate` | bpm |
-| Fall Probability | `eldercare/radar/falls` | `value_json.probability` | — |
+| Sensor | MQTT Topic | Unit |
+|---|---|---|
+| Radar Heart Rate | `eldercare/radar/heart_rate` | bpm |
+| Radar Breath Rate | `eldercare/radar/breath_rate` | bpm |
+| Fall Probability | `eldercare/radar/fall_probability` | — |
 
-### 4. Connecting the MPU to Home Assistant
+### 4. Emergency Dispatch Automation & ntfy Push Notifications
+
+The [`config/automations.yaml`](homeassistant/config/automations.yaml) defines the `Radar Emergency Dispatch` automation, triggered by the `emergency_dispatch` webhook. It handles two event types:
+
+| Trigger (`trigger.json.type`) | Action |
+|---|---|
+| `fall_cnn` | Creates a HA persistent notification + sends an **ntfy push** with fall confidence % and timestamp |
+| `vitals_alert` | Creates a HA persistent notification + sends an **ntfy push** with no-breath-detected duration |
+
+**ntfy** is a free, self-hostable push notification service. The [`rest_command.ntfy_notify`](homeassistant/config/configuration.yaml) block in `configuration.yaml` sends alerts to the topic `halo-radar-9dfc55e71cdb` on `ntfy.sh`. To receive alerts on your phone, install the [ntfy app](https://ntfy.sh/) and subscribe to that topic.
+
+> [!TIP]
+> To use your own private ntfy topic (recommended for production), change the `url` in `configuration.yaml` under `rest_command.ntfy_notify` to your own topic URL.
+
+### 5. Connecting the MPU to Home Assistant
 
 In `src/mpu_linux/main.py`, update the following constants to match your network:
 
 ```python
 # Thread 4 -- Event Router (src/mpu_linux/main.py)
 WEBHOOK_URL    = "http://<HA_HOST_IP>:8123/api/webhook/emergency_dispatch"
-MQTT_BROKER_IP = "<HA_HOST_IP>"   # same machine running docker compose
+MQTT_BROKER_IP = "<HA_HOST_IP>"   # host machine's LAN IP -- NOT 127.0.0.1
 MQTT_PORT      = 1883
 ```
 
-Once set, fall detections and vitals alerts flow automatically into Home Assistant:
-- Fall alerts (`fall_cnn`, `p > 0.85`) → webhook POST + `eldercare/radar/falls` MQTT
-- Vitals alerts (sustained zero breath rate) → webhook POST + `eldercare/radar/vitals` MQTT
+> [!IMPORTANT]
+> Use the **host machine's real LAN IP** (e.g. `192.168.1.15`), not `127.0.0.1`. The MPU runs in its own container and loopback will not reach the Mosquitto container.
+
+Once set, the full event flow is:
+- Every vitals reading → `eldercare/radar/heart_rate` + `eldercare/radar/breath_rate` (continuous live feed)
+- Every classifier window → `eldercare/radar/fall_probability` (continuous live feed)
+- Fall detected (`p > 0.85`) → `eldercare/radar/falls` (JSON) + webhook → HA notification + ntfy push
+- Vitals alert (sustained zero breath) → webhook → HA notification + ntfy push
 
 ---
 
