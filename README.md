@@ -9,11 +9,13 @@ Halo is a privacy-first, non-contact monitoring system for elder care facilities
 
 This repository contains the MCU firmware (Arduino UNO Q), the Linux edge application (Python, 4-thread), the trained PyTorch fall detection model, and the Home Assistant + Mosquitto dashboard stack.
 
+---
+
 ## 🌟 Key Features
 
 *   **Privacy-First:** No optical sensors. Only abstract 3D point clouds and bounding boxes are processed. Raw radar data never leaves the device.
 *   **Fully On-Edge:** All inference runs locally on the Linux MPU. No cloud uplink is required for detection.
-*   **Vital Signs Monitoring:** Heart rate and breathing rate are computed on the radar chip itself (TI's Vital Signs firmware). The host only consumes the pre-calculated values.
+*   **Vital Signs Monitoring:** Heart rate and breathing rate are computed on the radar chip itself (TI's Vital Signs firmware). The host only consumes the pre-computed values — no DSP required on the host.
 *   **Fall Detection:** A PyTorch CNN (`MyCNN`) classifies 25-frame rolling windows of point cloud data and emits a binary Fall/Not-Fall prediction with a confidence score.
 *   **Real-Time Alerting:** Confirmed falls (`p > 0.85`) and sustained breath-rate anomalies trigger MQTT publishes and HTTP webhooks to Home Assistant, which dispatches ntfy push notifications to a phone.
 
@@ -22,11 +24,19 @@ This repository contains the MCU firmware (Arduino UNO Q), the Linux edge applic
 ## Radar Configuration
 
 <p align="center">
-  <img src="docs/images/iwr-on-mmwaveicboost.png" alt="IWR6843ISK on mmWaveICBoost" width="550"/><br/>
+  <img src="docs/images/iwr-on-mmwaveicboost.png" alt="IWR6843ISK mounted on MMWAVEICBOOST" width="550"/><br/>
   <em>IWR6843ISK antenna module mounted on the MMWAVEICBOOST carrier board</em>
 </p>
 
-The IWR6843ISK antenna module must be mounted on the MMWAVEICBOOST carrier board. The ICBOOST provides the XDS110 debug/flash interface, barrel jack power input, and the RS-232 level-shifted UART headers (J5, J6) used for Arduino communication. Do not use the USB port on the green ISK antenna board for flashing or data — only the XDS110 USB port on the ICBOOST.
+<p align="center">
+  <img src="docs/images/iwr6843isk.png" alt="IWR6843ISK mmWave Radar Sensor" width="550"/><br/>
+  <em>TI IWR6843ISK — 60 GHz FMCW mmWave radar with on-chip vital signs processing</em>
+</p>
+
+The IWR6843ISK antenna module must be mounted on the MMWAVEICBOOST carrier board. The ICBOOST provides the XDS110 debug/flash interface, barrel jack power input (5 V/3 A), and the RS-232 level-shifted UART headers (J5, J6) used for Arduino communication.
+
+> [!WARNING]
+> Do **not** use the USB port on the green IWR6843ISK antenna board for flashing or data. Only the **XDS110 USB port** on the ICBOOST (the larger white board) is used.
 
 ### 1. Prerequisites & Downloads
 
@@ -38,43 +48,56 @@ The IWR6843ISK antenna module must be mounted on the MMWAVEICBOOST carrier board
 
 The radar ships with no application firmware. It must be flashed before first use.
 
-1. **Set switches for Flashing Mode** — Power off the board. On the ICBOOST, set the SOP and MUX switches to route UART to the XDS110 USB and enable flashing:
-   * **SOP (S1):** SOP0 ON | SOP1 OFF | SOP2 ON
+> [!IMPORTANT]
+> Vitals monitoring (heart rate and breathing rate) **requires** TI's dedicated "Vital Signs With People Tracking" prebuilt binary. It is **not** obtainable from the standard tracking binary — a separate flash is required. This is confirmed by TI's E2E forum and product documentation.
 
-   <p align="center">
-     <img src="docs/images/flashing-sop.png" alt="Flashing Mode SOP Switch Configuration" width="550"/><br/>
-     <em>SOP switches set for Flashing Mode (SOP2 ON)</em>
-   </p>
+#### Step 1 — Set switches for Flashing Mode
 
-   <p align="center">
-     <img src="docs/images/flashing-mux.png" alt="Flashing Mode MUX Switch Configuration" width="550"/><br/>
-     <em>MUX switches configured to route UART to the XDS110 USB for flashing</em>
-   </p>
+Power off the board. Set the SOP and MUX switches to route UART to the XDS110 USB and enable flashing:
 
-2. **Connect to PC** — Connect 5V/3A barrel jack power to the ICBOOST. Plug Micro-USB into the **XDS110 USB port** on the ICBOOST only.
-3. **Open UniFlash** — Select device `IWR6843ISK`. Under Settings, enter the COM port for the **Application/User UART** (visible in Windows Device Manager).
-4. **Select Binary** — Program tab → Meta Image 1 → browse to:
+**SOP (S1):** SOP0 ON | SOP1 OFF | SOP2 ON
+
+<p align="center">
+  <img src="docs/images/flashing-sop.png" alt="SOP switch configuration for Flashing Mode" width="550"/><br/>
+  <em>SOP switch configuration for Flashing Mode — SOP2 must be ON to enter the bootloader</em>
+</p>
+
+<p align="center">
+  <img src="docs/images/flashing-mux.png" alt="MUX switch configuration for Flashing Mode" width="550"/><br/>
+  <em>MUX switches routed to XDS110 USB — required for UniFlash to communicate with the chip</em>
+</p>
+
+#### Step 2 — Connect and Flash
+
+1. Connect the 5 V/3 A barrel jack to the ICBOOST.
+2. Plug Micro-USB into the **XDS110 USB port** on the ICBOOST only.
+3. Open **UniFlash** → select device `IWR6843ISK` → under Settings, enter the COM port for the **Application/User UART** (visible in Windows Device Manager).
+4. Program tab → Meta Image 1 → browse to:
    ```
    C:\ti\radar_toolbox_3_30_00_06\radar_toolbox_3_30_00_06\source\ti\examples\
    Industrial_and_Personal_Electronics\Vital_Signs\
    Vital_Signs_With_People_Tracking\prebuilt_binaries\
    vital_signs_tracking_6843ISK_demo.bin
    ```
-5. **Flash** — Click `Load Image`. Wait for "Success".
-6. **Set switches for Functional Mode (Arduino UART)** — Power off, then set the switches to route UART to the hardware headers and enable functional mode:
-   * **SOP (S1):** SOP0 ON | SOP1 OFF | SOP2 OFF
+5. Click **Load Image**. Wait for "Success".
 
-   <p align="center">
-     <img src="docs/images/functional-sop.png" alt="Functional Mode SOP Switch Configuration" width="550"/><br/>
-     <em>SOP switches set for Functional Mode (SOP2 OFF)</em>
-   </p>
+#### Step 3 — Set switches for Functional Mode (Arduino UART)
 
-   <p align="center">
-     <img src="docs/images/functional-mux.png" alt="Functional Mode MUX Switch Configuration" width="550"/><br/>
-     <em>MUX switches configured to route UART away from USB, towards the Arduino headers</em>
-   </p>
+Power off. Set the switches to route UART to the hardware headers and enable normal operation:
 
-7. Power on. The radar is now running the Vital Signs + Tracking firmware.
+**SOP (S1):** SOP0 ON | SOP1 OFF | SOP2 OFF
+
+<p align="center">
+  <img src="docs/images/functional-sop.png" alt="SOP switch configuration for Functional Mode" width="550"/><br/>
+  <em>SOP switches for Functional Mode — SOP2 OFF disables the bootloader and starts the application</em>
+</p>
+
+<p align="center">
+  <img src="docs/images/functional-mux.png" alt="MUX switch configuration for Functional Mode" width="550"/><br/>
+  <em>MUX switches in Functional Mode — UART routed to hardware headers (J5/J6) for Arduino communication</em>
+</p>
+
+Power on. The radar is now running the Vital Signs + Tracking firmware and will start streaming TLV data once it receives a configuration.
 
 ### 3. COM Ports
 
@@ -84,6 +107,9 @@ When the ICBOOST is connected via XDS110 USB, Windows enumerates **two** COM por
 |---|---|---|---|
 | CFG_PORT | XDS110 Class Application/User UART | 115200 | Send `.cfg` commands to start the sensor |
 | DATA_PORT | XDS110 Class Auxiliary Data Port | 921600 | Receive binary TLV telemetry stream |
+
+> [!NOTE]
+> 921,600 baud ≈ 92 KB/s. The STM32 ingests this via polled `Serial1.readBytes()`. True DMA UART ingestion is **not available** at the Arduino sketch level on this board — `ZephyrSerial` has no `setRxBufferSize()` method and buffer size is fixed by devicetree UART config. This is a confirmed architectural limitation, mitigated by fast on-device parsing and bounding-box pruning that reduces the bridge payload from multi-KB raw telemetry to ~20 bytes per target.
 
 ### 4. Radar Configuration
 
@@ -99,7 +125,21 @@ Vital_Signs_With_People_Tracking\chirp_configs\vital_signs_ISK_6m.cfg
 **Sending the config — two options:**
 
 * **Option A (GUI):** Run the Industrial Visualizer at `\tools\visualizers\Industrial_Visualizer` in the toolbox. Select the correct XDS110 COM ports, select the "Vital Signs with People Tracking" lab, load `vital_signs_ISK_6m.cfg`, and click Start.
-* **Option B (Arduino sketch):** The `sketch.ino` firmware embeds the full config as a `const char* radarConfig[]` array. At boot, it sends each line to the radar over Serial1 (115200 baud) with a 5-second delay for radar boot time. No manual config step is required when the Arduino is in use.
+* **Option B (Arduino sketch):** `sketch.ino` embeds the full config as a `const char* radarConfig[]` array. At boot, it sends each line over Serial1 (115200 baud) with a 5-second startup delay for radar boot time. No manual config step is required when using the Arduino.
+
+### 5. Radar Config Tuning
+
+The default vendor config (`vital_signs_ISK_6m.cfg`) is tuned for a **ceiling-mounted**, room-scale deployment aimed at near-static elderly movement. The parameters below were retuned for the actual table-mount geometry used in development (~0.75 m height, ~0.6 m range, active test movements):
+
+| Parameter | Original | Retuned | Reason |
+|---|---|---|---|
+| `sensorPosition` | `2 0 15` (ceiling, tilted) | `0.75 0 0` (table, flat) | Matches real mount height and tilt |
+| `boundaryBox` Ymin | `0.5` | `0.3` | Seated distance at ~0.6 m needs lean-forward margin |
+| `maxAcceleration` | `0.1 0.1 0.1` | `2.0 2.0 2.0` | Original value dropped every track on normal walking speed |
+| `stateParam` (active2freeThre) | `6` | `80` | Raises miss tolerance to ~4.4 s; prevents ID reset on short stop-then-resume gaps |
+
+> [!CAUTION]
+> The table-mount geometry cannot observe a real standing-to-floor fall arc — the observed Z range stays ~0–0.3 m, the same as the floor threshold. Fall detection at this mount demonstrates the *algorithm* and pipeline, not validated real-fall geometry. A genuine elder-care deployment requires the original **ceiling-mount** geometry (≥ 2 m height, tilted down) that this firmware profile was designed for.
 
 ---
 
@@ -108,13 +148,13 @@ Vital_Signs_With_People_Tracking\chirp_configs\vital_signs_ISK_6m.cfg
 ### 1. Arduino MCU Setup & Wiring
 
 <p align="center">
-  <img src="docs/images/mmwaveicboost.png" alt="MMWAVEICBOOST" width="550"/><br/>
-  <em>MMWAVEICBOOST carrier board header layout</em>
+  <img src="docs/images/mmwaveicboost.png" alt="MMWAVEICBOOST carrier board header layout" width="550"/><br/>
+  <em>MMWAVEICBOOST carrier board — J5 (left) and J6 (right) UART headers used for Arduino wiring</em>
 </p>
 
 <p align="center">
   <img src="docs/images/Arduino-UNO-Q-pinout.png" alt="Arduino UNO Q Pinout" width="550"/><br/>
-  <em>Arduino UNO Q Pinout and hardware overview</em>
+  <em>Arduino UNO Q pinout — D0 (RX) and D1 (TX) are the hardware UART pins wired to the ICBOOST</em>
 </p>
 
 **Arduino UNO Q — Dual-Processor Architecture:**
@@ -128,8 +168,6 @@ The Arduino UNO Q contains two processors on a single board:
 
 The two processors communicate over an **internal UART** (not exposed externally). The `Arduino_RouterBridge` library on the STM32 side multiplexes named channels over this internal UART to the Linux MPU. The Python application on the Linux MPU opens the bridge via the `routerbridge` Python package — it does **not** open an external USB serial port. The board appears to the development PC as a USB CDC device only for flashing and the Arduino App Lab debugger connection.
 
-The Arduino UNO Q (STM32 side) bridges the ICBOOST's UART headers to the Linux MPU via `Arduino_RouterBridge`. It parses the raw TLV binary stream from the radar and re-emits three separate structured channels over the internal UART bridge.
-
 **Wiring (Arduino UNO Q ↔ MMWAVEICBOOST):**
 
 | Arduino Pin | ICBOOST Header | Direction | Baud | Purpose |
@@ -139,24 +177,30 @@ The Arduino UNO Q (STM32 side) bridges the ICBOOST's UART headers to the Linux M
 | D0 (USART1_RX) | J6 Pin 9 (Data TX) | Radar → Arduino | 921600 | High-speed TLV data stream |
 
 <p align="center">
-  <img src="docs/images/unoq-radar-wiring.png" alt="UNO Q to Radar Wiring Diagram" width="550"/><br/>
-  <em>Arduino UNO Q to MMWAVEICBOOST UART Wiring Diagram</em>
+  <img src="docs/images/unoq-radar-wiring.png" alt="Arduino UNO Q to MMWAVEICBOOST UART wiring diagram" width="550"/><br/>
+  <em>3-wire UART wiring: GND, D1 (TX→RS232RX), D0 (RX←Data TX) — keep wires short to minimise bit-flip corruption at 921,600 baud</em>
 </p>
 
 > [!IMPORTANT]
-> Power the ICBOOST from its dedicated 5V/3A barrel jack. Do **not** attempt to power it from the Arduino's 5V pin. The radar draws up to 3A at peak; the Arduino's regulator cannot supply this.
+> Power the ICBOOST from its dedicated **5 V/3 A barrel jack**. Do **not** attempt to power it from the Arduino's 5 V pin. The IWR6843ISK draws up to 3 A at peak; the Arduino's onboard regulator cannot supply this.
+
+> [!NOTE]
+> At 921,600 baud over unshielded jumper wires, occasional bit-flip corruption is normal. The sketch applies per-field sanity bounds (X/Y/Z physically plausible ranges, heart rate 30–220 bpm, breath rate 3–60 bpm) to silently reject corrupted single-field values without discarding the whole frame. Shortening the jumper wires and using twisted-pair reduces the error rate further.
 
 **STM32 ↔ Linux MPU Communication (Internal UART Bridge):**
 
-The STM32H573 core runs `sketch.ino` and communicates with the on-board Linux MPU over an **internal UART** using the `Arduino_RouterBridge` library. This is not a USB connection — the bridge is a dedicated hardware UART between the two processors on the UNO Q board. The bridge multiplexes three named channels over that single internal UART:
+The STM32H573 core communicates with the on-board Linux MPU over an **internal UART** using `Arduino_RouterBridge`. The bridge multiplexes three named channels:
 
 | Channel Name | Content | Consumed by |
 |---|---|---|
 | `radar_targets` | Parsed target-list records (`<2I3f`) | Thread 1 — Spatial Engine |
 | `radar_vitals` | Parsed vitals records (`<2H3f`) | Thread 3 — Vitals Consumer |
-| `radar_pointcloud` | Raw/Compressed point cloud (TLV 1/1020) | Thread 2 — Activity Classifier |
+| `radar_pointcloud` | Decoded compressed point cloud (TLV 1020) | Thread 2 — Activity Classifier |
 
-On the Linux MPU side, `main.py` opens the bridge using the `routerbridge` Python package (installed via `requirements.txt`). The `Bridge` object registers one callback per channel. Each callback does nothing except enqueue the raw bytes into the corresponding `queue.Queue`. No parsing happens in the callbacks — this decouples receive latency from processing time and prevents the STM32 from stalling waiting for the Linux side to consume.
+> [!NOTE]
+> The bridge carries **results, not raw telemetry.** This is the central architectural decision — it reduces the per-frame bridge payload from multi-KB raw stream to ~20 bytes per target. All TLV parsing and bounding-box pruning happen on the STM32 before anything crosses the bridge.
+
+On the Linux MPU side, `main.py` registers one callback per channel. Each callback does nothing except enqueue raw bytes into a `queue.Queue` — no parsing happens in the callback, decoupling receive latency from processing time.
 
 **Flashing the Arduino:**
 1. Open `src/mcu_arduino/sketch.ino` in Arduino IDE.
@@ -169,8 +213,8 @@ On the Linux MPU side, `main.py` opens the bridge using the `routerbridge` Pytho
 #### Option A: Arduino App Lab (Recommended)
 
 <p align="center">
-  <img src="docs/images/arduino_app_lab.png?v=1" alt="Arduino App Lab" width="800"/><br/>
-  <em>Arduino App Lab interface running both sketch and Python application</em>
+  <img src="docs/images/arduino_app_lab.png?v=1" alt="Arduino App Lab IDE" width="800"/><br/>
+  <em>Arduino App Lab — unified IDE that runs the STM32 sketch and Python application simultaneously from a single project</em>
 </p>
 
 **Arduino App Lab** is an IDE built into the Arduino UNO Q environment that runs both the STM32 sketch and the Python application simultaneously from a single project. There is no need to run them separately or manage two terminals.
@@ -181,7 +225,7 @@ In App Lab, the project is structured with two top-level folders:
 
 To run:
 1. Open the App Lab project `radar_fall_detection`.
-2. Click **Run** (top-right). App Lab flashes the sketch to the STM32 and starts `python/main.py` on the host simultaneously.
+2. Click **Run** (top-right). App Lab flashes the sketch to the STM32 and starts `python/main.py` on the Linux MPU simultaneously.
 3. The **App launch** tab shows the STM32 flash and GDB session output. The **Python** tab shows `main.py` stdout.
 
 All output files (`events.jsonl`, `pointcloud_log.csv`) are written inside the `python/` folder.
@@ -197,6 +241,9 @@ pip install -r requirements.txt
 
 `requirements.txt` uses `--extra-index-url https://download.pytorch.org/whl/cpu` so `torch` pulls from the CPU-only wheel index. Standard packages (`requests`, `paho-mqtt`, `numpy`) resolve from PyPI.
 
+> [!WARNING]
+> Do **not** change `--extra-index-url` to `--index-url`. The latter **replaces** the default PyPI index for the entire file, causing `paho-mqtt` and other standard packages to fail resolution. `--extra-index-url` *adds* to PyPI, it does not replace it.
+
 Set the serial port in `main.py` to your Arduino's USB device path (`COM3` on Windows, `/dev/ttyACM0` on Linux), then:
 
 ```bash
@@ -211,22 +258,22 @@ The application prints per-thread startup confirmations. If `[Thread2] First poi
 
 <p align="center">
   <img src="docs/diagrams/architecture.png?v=1" alt="System Architecture" width="550"/><br/>
-  <em>System Architecture: Three-tier edge processing pipeline</em>
+  <em>Three-tier edge processing pipeline: IWR6843ISK → Arduino UNO Q (STM32) → Linux MPU → Home Assistant</em>
 </p>
 
 The system has three compute tiers:
 
-*   **Tier 1 — Radar Sensor (IWR6843ISK):** Runs TI's Vital Signs + Tracking firmware on-chip. Outputs pre-clustered target lists, compressed point clouds, and pre-computed heart/breath rates over UART at 921600 baud.
-*   **Tier 2 — Real-Time Coprocessor (Arduino UNO Q / STM32):** Parses the raw binary TLV stream in real time. Applies spatial bounding-box pruning and sanity validation, then re-emits three structured channels (`radar_targets`, `radar_vitals`, `radar_pointcloud`) to the Linux host over USB.
-*   **Tier 3 — Linux Application MPU (Python):** Four-thread application that consumes the three channels, runs fall detection inference, and dispatches alerts.
+*   **Tier 1 — Radar Sensor (IWR6843ISK):** Runs TI's Vital Signs + Tracking firmware on-chip. Outputs pre-clustered target lists, compressed point clouds (TLV 1020), and pre-computed heart/breath rates (TLV 1040) over UART at 921,600 baud.
+*   **Tier 2 — Real-Time Coprocessor (Arduino UNO Q / STM32H573):** Parses the raw binary TLV stream in real time. Applies spatial bounding-box pruning and per-field sanity validation, then re-emits three structured channels to the Linux MPU over the internal UART bridge.
+*   **Tier 3 — Linux Application MPU (Python):** Four-thread application that consumes the three channels, runs fall detection inference, and dispatches alerts via MQTT and Home Assistant webhooks.
 
 ---
 
 ## 📡 Data Pipeline & Telemetry
 
 <p align="center">
-  <img src="docs/diagrams/data_flow.png?v=1" alt="Data Pipeline &amp; Telemetry" width="550"/><br/>
-  <em>Data Pipeline and Telemetry Flow Sequence</em>
+  <img src="docs/diagrams/data_flow.png?v=1" alt="Data Pipeline and Telemetry Flow" width="550"/><br/>
+  <em>Full data flow: from radar TLV stream through STM32 parsing to Linux inference and Home Assistant alerting</em>
 </p>
 
 The radar streams binary TLV (Type-Length-Value) packets at each frame interval. Each packet begins with an 8-byte magic word (`0x02 0x01 0x04 0x03 0x06 0x05 0x08 0x07`) followed by a 40-byte header, then one or more TLV payloads.
@@ -235,16 +282,19 @@ The radar streams binary TLV (Type-Length-Value) packets at each frame interval.
 
 | TLV Type | Content | Output Channel |
 |---|---|---|
-| **1** | Raw point cloud: `(frameNum, x, y, z, doppler_velocity)` per point | `radar_pointcloud` |
 | **1010** | Tracked target list: `(frameNum, tid, x, y, z)` per target (112-byte struct: 1× uint32 + 27× float) | `radar_targets` |
-| **1020** | Compressed point cloud: encoded as `(elev, azim, doppler, range)` int8/int16 with per-frame scale units | `radar_pointcloud` |
-| **1040** | Vitals: `(id, rangeBin, breathDeviation, heartRate, breathRate)` | `radar_vitals` |
+| **1020** | **Compressed** point cloud: 20-byte unit header (5 floats: elevUnit, azimUnit, dopplerUnit, rangeUnit, snrUnit) + 8 bytes per point (int8 elev, int8 azim, int16 doppler, uint16 range, uint16 snr) | `radar_pointcloud` |
+| **1040** | Vitals: `(id, rangeBin, breathDeviation, heartRate, breathRate)` — 136-byte struct, pre-computed on-chip | `radar_vitals` |
+| **1011, 1012** | Parsed but not forwarded | — |
 
-Types 1011, 1012 are parsed but not forwarded. Any other TLV type aborts the remainder of that frame immediately.
+> [!IMPORTANT]
+> TLV type `1` (raw `x,y,z,doppler` float struct) is **not present** in the Vital Signs + Tracking binary. The actual point cloud stream is type **`1020`** (`MMWDEMO_OUTPUT_MSG_COMPRESSED_POINTS`) — a compressed spherical format requiring decompression via the per-frame unit header and then spherical-to-Cartesian conversion. Assuming type `1` (from other TI demo reference code) results in silently delivering zero point cloud data.
+
+Any unrecognised TLV type aborts parsing of the remainder of that frame immediately.
 
 ### On-Device Bounding Box & Sanity Filtering
 
-All filtering runs on the Arduino before data reaches the Linux host. The active spatial bounds (matching `boundaryBox` in the radar config):
+All filtering runs on the STM32 before data reaches the Linux MPU. Active spatial bounds (matching `boundaryBox` in the radar config):
 
 | Axis | Min | Max |
 |---|---|---|
@@ -252,15 +302,18 @@ All filtering runs on the Arduino before data reaches the Linux host. The active
 | Y | 0.3 m | 6.0 m |
 | Z | 0.0 m | 3.0 m |
 
-Points outside these bounds are silently dropped. Per-frame sanity limits: max 200 points per TLV, max packet length 16384 bytes, max 20 TLVs per frame. Vitals records with heart rate outside [30, 220] bpm, breath rate outside [3, 60] bpm, or `|breathDeviation| > 100` are rejected as UART corruption.
+Points outside these bounds are silently dropped. Per-frame sanity limits: max 200 points per TLV, max packet length 16,384 bytes, max 20 TLVs per frame. Vitals records with heart rate outside [30, 220] bpm, breath rate outside [3, 60] bpm, or `|breathDeviation| > 100` are rejected as UART corruption.
+
+> [!NOTE]
+> Target records with `Y = 0.00` and `Z = 0.00` simultaneously are also filtered out defensively. This degenerate pattern appears consistently in live output and likely represents a tracker coast/low-confidence state — cause unconfirmed against TI documentation, but these records carry no reliable signal for fall detection.
 
 ---
 
 ## 🧠 Linux Application MPU Architecture
 
 <p align="center">
-  <img src="docs/diagrams/process_threads.png?v=1" alt="Linux Application MPU Architecture" width="550"/><br/>
-  <em>Linux MPU Architecture: 4-thread daemon with non-blocking receive queues</em>
+  <img src="docs/diagrams/process_threads.png?v=1" alt="Linux MPU 4-thread architecture" width="550"/><br/>
+  <em>Linux MPU: four daemon threads consuming dedicated queues — receive callbacks only enqueue, never parse</em>
 </p>
 
 The Python application uses four daemon threads. All Bridge callbacks do nothing except enqueue raw bytes into `queue.Queue` objects — parsing never blocks receive.
@@ -269,9 +322,9 @@ The Python application uses four daemon threads. All Bridge callbacks do nothing
 
 *   **Thread 1 — Spatial Engine:** Consumes `radar_targets`. Each target record is a 20-byte struct (`<2I3f`: frameNum, tid, x, y, z). Maintains `active_targets` dict keyed by tid. Runs `check_fall()` per target per frame. A target must appear in at least 2 consecutive frames (`REQUIRED_CONSECUTIVE_FRAMES = 2`) before it is tracked.
 
-*   **Thread 2 — Activity Classifier:** Consumes `radar_pointcloud`. Each record is a 20-byte struct (`<I4f`: frameNum, x, y, z, doppler). Accumulates a rolling window of 25 frames (`MODEL_WINDOW_FRAMES = 25`), padded to 22 points per frame (`MODEL_MAX_POINTS = 22`) using zero-padding. On each complete window, runs `MyCNN` inference and publishes `fall_probability` to MQTT and the event queue. Falls with `p > 0.85` additionally publish `fall_cnn`.
+*   **Thread 2 — Activity Classifier:** Consumes `radar_pointcloud`. Each point is a 20-byte struct (`<I4f`: frameNum, x, y, z, doppler). Accumulates a rolling window of 25 frames (`MODEL_WINDOW_FRAMES = 25`), zero-padded to 22 points per frame (`MODEL_MAX_POINTS = 22`). On each complete window, runs `MyCNN` inference and publishes `fall_probability` to MQTT. Falls with `p > 0.85` additionally publish `fall_cnn` and trigger the HA webhook.
 
-*   **Thread 3 — Vitals Consumer:** Consumes `radar_vitals`. Each record is a 16-byte struct (`<2H3f`: id, rangeBin, breathDeviation, heartRate, breathRate). Applies the same sanity bounds as the sketch. Publishes every valid reading as `vitals_reading` to MQTT. If `breathRate` stays at 0 for ≥ 15 seconds (`VITALS_ZERO_BREATH_ALERT_SEC = 15.0`), emits `vitals_alert`.
+*   **Thread 3 — Vitals Consumer:** Consumes `radar_vitals`. Each record is a 16-byte struct (`<2H3f`: id, rangeBin, breathDeviation, heartRate, breathRate). Applies the same sanity bounds as the sketch. Publishes **every valid reading** as `vitals_reading` to MQTT (continuous stream, not only on alert events). If `breathRate` stays at 0 for ≥ 15 seconds (`VITALS_ZERO_BREATH_ALERT_SEC = 15.0`), emits `vitals_alert`.
 
 *   **Thread 4 — Event Router:** Consumes `event_queue`. Appends every event to `python/events.jsonl`. Routes by event type:
     *   `vitals_reading` → MQTT `eldercare/radar/heart_rate` + `eldercare/radar/breath_rate` (bare float)
@@ -333,11 +386,11 @@ Configured in [`mosquitto/config/mosquitto.conf`](homeassistant/mosquitto/config
 | Logging | File — `/mosquitto/log/mosquitto.log` |
 
 > [!WARNING]
-> `allow_anonymous true` is intentional for local LAN use. For a production deployment, enable password authentication in `mosquitto.conf`.
+> `allow_anonymous true` is intentional for local LAN use only. For any production deployment, enable password authentication in `mosquitto.conf`.
 
 ### 3. Home Assistant MQTT Sensors
 
-Defined in [`config/configuration.yaml`](homeassistant/config/configuration.yaml). Each sensor subscribes to a dedicated topic carrying a **bare numeric payload** (not JSON). This is required — HA's MQTT sensor cannot cast a JSON blob to a numeric state without an explicit `value_template`.
+Defined in [`config/configuration.yaml`](homeassistant/config/configuration.yaml). Each sensor subscribes to a dedicated topic carrying a **bare numeric payload** (not JSON). This is required — HA's MQTT sensor cannot cast a JSON blob to a numeric state without an explicit `value_template`, and the dedicated bare-numeric topics avoid that complexity.
 
 | Sensor Name | MQTT Topic | Unit |
 |---|---|---|
@@ -357,7 +410,10 @@ The [`config/automations.yaml`](homeassistant/config/automations.yaml) defines t
 ntfy push uses [`rest_command.ntfy_notify`](homeassistant/config/configuration.yaml) in `configuration.yaml`, which posts to `https://ntfy.sh/halo-radar-9dfc55e71cdb` with `Priority: urgent`. Install the [ntfy app](https://ntfy.sh/) and subscribe to that topic to receive alerts on your phone.
 
 > [!TIP]
-> Change the `url` under `rest_command.ntfy_notify` to your own private ntfy topic for production use.
+> Change the `url` under `rest_command.ntfy_notify` to your own private ntfy topic for production use. The topic name in this repository is already publicly listed — treat it as a demo address, not a private channel.
+
+> [!NOTE]
+> ntfy.sh is a free public relay with no delivery SLA. It was chosen over the official Home Assistant push notification service, which now requires a paid Nabu Casa subscription. For a real elder-care deployment, self-host an ntfy instance or use a service with guaranteed delivery.
 
 ### 5. Connecting the MPU to Home Assistant
 
@@ -370,7 +426,7 @@ MQTT_PORT      = 1883
 ```
 
 > [!IMPORTANT]
-> Use the host machine's real LAN IP (run `hostname -I` on Linux or `ipconfig` on Windows). Do **not** use `127.0.0.1` — the MPU and Mosquitto run in separate Docker containers; loopback resolves to the calling container only.
+> Use the host machine's real LAN IP (run `hostname -I` on Linux or `ipconfig` on Windows). Do **not** use `127.0.0.1` — the MPU application and Mosquitto run in **separate Docker containers**; loopback inside a container refers to that container only, not the host or any sibling container.
 
 **Full event flow once configured:**
 
@@ -387,7 +443,7 @@ MQTT_PORT      = 1883
 
 ### Architecture
 
-`MyCNN` is a 2D convolutional classifier defined in `src/mpu_linux/main.py` and mirrored exactly in `model_training/notebooks/FallDetection_root.ipynb`. The two definitions must be kept in sync — the `.pth` file stores weights only (`state_dict`), not the model class. Loading requires an instantiated `MyCNN` object.
+`MyCNN` is a spatiotemporal 2D convolutional classifier defined in `src/mpu_linux/main.py` and mirrored exactly in `model_training/notebooks/FallDetection_root.ipynb`. **The two definitions must be kept in sync** — the `.pth` file stores weights only (`state_dict`), not the model class. Loading requires an instantiated `MyCNN` object first.
 
 ```
 Input: (1, 25, 22, 4)   ← (batch, frames, max_points, features)
@@ -401,6 +457,9 @@ Linear(32, 1) → sigmoid → probability
 
 All layers use `dtype=torch.float32`.
 
+> [!IMPORTANT]
+> `fc1`'s input size (`32×5×1 = 160`) is derived from the conv/pool layer arithmetic and depends on `MODEL_MAX_POINTS = 22`. If retraining produces a different `max_detobj`, recompute using: `H1 = floor((H_in − 1) / 2) + 1`, `H2 = floor(H1 / 2)`, `fc1_in = 32 × H2`. A mismatch between the notebook's `MyCNN` and `main.py`'s copy will cause a load-time crash.
+
 ### Input Tensor
 
 | Dimension | Size | Content |
@@ -410,13 +469,46 @@ All layers use `dtype=torch.float32`.
 | Max Points | 22 (`MODEL_MAX_POINTS`) | Points per frame, zero-padded if fewer detected |
 | Features | 4 | `(X, Y, Z, Doppler_Velocity)` |
 
-`MODEL_MAX_POINTS = 22` must match the value used during training (the notebook's `equal_newdf` min-max object count). If retraining produces a different value, update `MODEL_MAX_POINTS` in `main.py` and recompute `fc1`'s `in_features` (`32 × H_out × W_out` after conv/pool arithmetic).
+### Training
+
+*   **Dataset:** Pulled from [sareebali/mmwave-radar-fall-detection](https://github.com/sareebali/mmwave-radar-fall-detection.git) — real-world IWR6843 point cloud data containing distinct fall events.
+*   **Method:** K-Fold cross-validation across 5 folds.
+*   **Result:** Average test accuracy **95.1%** (F1 Score: 0.95).
+
+> [!NOTE]
+> The model was trained on a single person in a single environment. Generalisation to other environments, body types, and movement patterns is unverified.
 
 ### Files
 
-*   **Model weights:** `python/fall_model.pth` — This path is relative to the **Arduino App Lab project root**. The application runs inside an Arduino App Lab project (see screenshot), where `main.py` and all Python files live under a `python/` subfolder. Place `fall_model.pth` in that same `python/` directory alongside `main.py`.
+*   **Model weights:** `python/fall_model.pth` — relative to the **Arduino App Lab project root**. Place it in the `python/` subfolder alongside `main.py`.
 *   **Training notebook:** `model_training/notebooks/FallDetection_root.ipynb`
-*   **Training data:** `model_training/data/GatheredData/` (pulled from https://github.com/sareebali/mmwave-radar-fall-detection.git)
+*   **Training data:** `model_training/data/GatheredData/` (pulled from [sareebali/mmwave-radar-fall-detection](https://github.com/sareebali/mmwave-radar-fall-detection.git))
+
+---
+
+## 🔧 Troubleshooting
+
+| Symptom | Likely Cause | Fix |
+|---|---|---|
+| `[Thread2] First pointcloud batch received` never prints | Radar not emitting; wrong SOP switch state or config not sent | Verify SOP2 = OFF (functional mode). Check that the sketch completed radar config — look for "Radar config sent" on the STM32 serial output. |
+| Absurd float values in target output (e.g., `−4.35×10³⁷`) | UART bit-flip corruption from unshielded jumper wires at 921,600 baud | Shorten the wires. The sketch's per-field sanity filter catches most of these silently. |
+| `vitals_alert` never fires despite no movement | Wrong firmware binary; or all vitals readings rejected by sanity filter | Confirm the binary is the Vital Signs + Tracking version. Check for `[Thread3] Vitals rejected (corrupt)` messages in Python output. |
+| MQTT sensor shows "Unknown" or "Entity is non-numeric" | Sensor config points at wrong topic or has a `value_template` on a bare-numeric payload | Ensure `state_topic` is `eldercare/radar/heart_rate` with **no** `value_template`. Restart HA after config changes. |
+| `Connection refused` connecting to MQTT broker | Using `127.0.0.1` inside a Docker container | Use the host machine's real LAN IP (`hostname -I`). `127.0.0.1` inside a container is that container's loopback only. |
+| `paho-mqtt` deprecation warnings on startup | Old callback API version | Instantiate with `mqtt.CallbackAPIVersion.VERSION2`. |
+| Model fails to load: `'OrderedDict' has no attribute 'eval'` | Loading a `state_dict` as if it were a full model | Instantiate `MyCNN()` first, then call `model.load_state_dict(torch.load(...))` followed by `model.eval()`. |
+| `paho-mqtt` not found after `pip install -r requirements.txt` | `--index-url` replaced the entire PyPI registry | Ensure `requirements.txt` uses `--extra-index-url`, not `--index-url`. |
+
+---
+
+## ⚠️ Known Limitations
+
+1. **Mount geometry** — A table/chest-level mount (≤ 1 m) cannot observe a real standing-to-floor fall arc. The observed Z range at this height (~0–0.3 m) equals the floor threshold, leaving no signal margin. A genuine elder-care deployment needs a ceiling-mount at ≥ 2 m.
+2. **No DMA UART ingestion** — Confirmed unavailable at the `.ino` sketch level on this board (`ZephyrSerial` has no `setRxBufferSize()`). Mitigated by on-device parsing and pruning; not physically eliminated.
+3. **UART corruption** — Unshielded jumper-wire connections at 921,600 baud produce occasional bit-flip errors. Per-field sanity filtering catches most cases; shortening and shielding the wires reduces the source.
+4. **Small, single-environment training set** — The model was trained on proxy falls by one person in one environment. Generalisation is unverified.
+5. **ntfy.sh reliability** — Free public relay with no delivery SLA. Acceptable for a demo; a real deployment should self-host or use a paid service.
+6. **CPU/RAM budget not formally profiled** — The system runs acceptably in practice on the Linux MPU, but no hard per-thread measurements have been taken.
 
 ---
 
@@ -431,7 +523,7 @@ All layers use `dtype=torch.float32`.
 │   ├── config/               # Home Assistant configuration
 │   └── mosquitto/config/     # Mosquitto broker configuration
 ├── model_training/
-│   ├── data/                 # Pointcloud capture CSVs (pulled from sareebali/mmwave-radar-fall-detection)
+│   ├── data/                 # Point cloud capture CSVs (pulled from sareebali/mmwave-radar-fall-detection)
 │   └── notebooks/            # FallDetection_root.ipynb
 └── src/
     ├── mcu_arduino/          # sketch.ino — TLV parser + radar config + bridge
@@ -456,6 +548,8 @@ All layers use `dtype=torch.float32`.
 **Texas Instruments:**
 - [Radar Toolbox](https://dev.ti.com/tirex/explore/node?node=A__AEIJm0rwIeU.2P1OBWwlaA__radar_toolbox__1AslXXD__LATEST)
 - [UniFlash](https://www.ti.com/tool/UNIFLASH)
+- [IWR6843ISK Product Page](https://www.ti.com/tool/IWR6843ISK)
+- [MMWAVEICBOOST Product Page](https://www.ti.com/tool/MMWAVEICBOOST)
 
 ---
 *Developed for elder care environments demanding the highest degree of privacy, dignity, and reliability.*

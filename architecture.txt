@@ -1,0 +1,280 @@
+# Radar Fall Detection + Vitals Monitoring — Architecture (v2)
+
+Status: STM32 firmware layer implemented and tested. Linux MPU 4-thread
+application layer **now built and running end-to-end**, including MQTT →
+Home Assistant → push notification delivery, confirmed working against
+real hardware. This supersedes the v1 doc, which was written when the
+Linux side was still unbuilt.
+
+---
+
+## Do You Need to Flash a New Image for Vitals?
+
+**Yes — confirmed, and now also confirmed working in practice.** The
+"Vital Signs With People Tracking" binary is flashed and running.
+`radarConfig[]` (adapted from the vendor `.cfg`, with tracker tuning
+carried over) has been tested against real hardware output — this closes
+the "Radar cfg for vitals binary: Untested" item from v1.
+
+---
+
+## System Diagram
+
+```text
+┌────────────────────────────────────────────────────────────────────────┐
+│             TI IWR6843 (Flashed with Vital Signs + Tracking)           │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │ Raw Binary Telemetry Stream
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                  STM32 Real-Time Coprocessor (Arduino UNO Q)           │
+│  • Polled UART ingestion (NOT DMA — unavailable at sketch level        │
+│    on this board, confirmed by compile error, see Corrections)         │
+│  • Triple TLV parsing, all structs sourced from parseTLVs.py:          │
+│      - Type 1010: Target List (tracked, on-chip)                      │
+│      - Type 1040: Vitals (heartRate/breathRate, pre-computed)          │
+│      - Type 1020: COMPRESSED Point Cloud (corrected from an earlier    │
+│        wrong assumption of raw type 1 — see Corrections)               │
+│  • On-device bounding-box pruning + per-field sanity bounds            │
+│    (rejects bit-flip corruption from UART line noise)                  │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │ 3 compact Bridge channels
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│              Linux Application MPU — BUILT, RUNNING, TESTED            │
+│                                                                        │
+│  Thread 1: Spatial Engine       Thread 2: Activity Classifier          │
+│  - radar_targets -> fall        - radar_pointcloud -> 25-frame         │
+│    threshold logic (Z-drop        rolling window -> MyCNN (PyTorch,    │
+│    + settle pattern)              float32) -> fall probability         │
+│                                                                        │
+│  Thread 3: Vitals Consumer      Thread 4: Event Router                 │
+│  - radar_vitals -> sanity       - MQTT (continuous + alert topics)     │
+│    filter -> threshold           - Webhook -> HA automation ->         │
+│    (sustained zero breath)         persistent_notification + ntfy     │
+│                                     push to phone                      │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │ MQTT + Webhook
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│   Home Assistant + Mosquitto (Docker) — heart rate, breath rate,       │
+│   fall probability live on dashboard; fall/vitals alerts trigger       │
+│   push notification via ntfy.sh                                       │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Corrections Carried Over From v1 (still accurate)
+
+- **DMA UART ingestion**: still not implemented, still not possible at
+  the `.ino` sketch level on this board (`ZephyrSerial` has no
+  `setRxBufferSize()`). Mitigated via fast on-device parsing + pruning,
+  not eliminated.
+- **Bandwidth math**: 921,600 baud ≈ 92KB/s, still correct.
+
+## New Corrections (found after v1 was written)
+
+### 7. Point Cloud TLV type — corrected from 1 to 1020
+
+**v1 assumption:** raw point cloud, TLV type `1`, struct `x,y,z,doppler`
+(4 floats).
+
+**Actual, confirmed via live debug logging:** this binary sends TLV type
+`1` essentially never (or only as parse-desync noise). The real,
+consistently-present point cloud stream is TLV type **`1020`**
+(`MMWDEMO_OUTPUT_MSG_COMPRESSED_POINTS`), a **compressed** format:
+
+```
+Header (20 bytes): 5 floats — elevationUnit, azimuthUnit, dopplerUnit, rangeUnit, snrUnit
+Per point (8 bytes): int8 elevation, int8 azimuth, int16 doppler, uint16 range, uint16 snr
+```
+
+Each raw value is decompressed by multiplying against its corresponding
+unit, then converted from spherical to cartesian (same formula as
+`gui_common.py`'s `sphericalToCartesianPointCloud`, confirmed against
+`parseCompressedSphericalPointCloudTLV` in the reference `parseTLVs.py`).
+
+**How this was found:** a one-time-per-type debug logger was added to
+the STM32 sketch, printing the first occurrence of every TLV type seen.
+Most of the resulting list was garbage (single-frame UART bit-flip
+corruption producing nonsense header values like `4294967295`) — but
+`1020, length 60` (and later `length 372` in a different session) stood
+out as a real, sane value matching a known constant. `radar_pointcloud`
+had been silently delivering zero data until this fix.
+
+### 8. Vitals TLV — needed the same sanity filtering as targets, didn't have it
+
+Live testing surfaced a corrupted vitals record: `Breath Dev:
+2052689190705117215236030464.000` — the same class of UART bit-flip
+corruption already handled for targets, but the vitals TLV parser had no
+bounds checking at all. Fixed on both the STM32 side (reject at source)
+and the Python side (defense in depth): heart rate bounded 30-220bpm (or
+exactly 0, a legitimate "no lock" state), breath rate 3-60bpm (or 0),
+breath deviation magnitude capped.
+
+### 9. Degenerate target records (Y=0, Z=0 exactly)
+
+Recurring pattern in live target output: `X: -0.35m | Y: 0.00m | Z:
+0.00m` — X stays plausible, Y and Z snap to exactly zero. Cause not
+confirmed against TI documentation (possibly a tracker coast/low-
+confidence state) — filtered out in Thread 1 as a precaution regardless,
+since a degenerate reading like this carries no reliable signal for
+fall-detection logic either way.
+
+### 10. Thread 2 model loading — real bug, now fixed
+
+First real-hardware run threw `'collections.OrderedDict' object has no
+attribute 'eval'`. Cause: the model was correctly saved as a
+`state_dict` (best practice, portable across PyTorch versions) but the
+loading code treated the loaded object as if it were a full model,
+calling `.eval()` directly on the state_dict. Fixed: `MyCNN` class is
+now defined identically in both the training notebook and `main.py`;
+loading instantiates the class, then `load_state_dict()`s into it.
+
+### 11. Model dtype — changed from float64 to float32 (deliberate, correct)
+
+Original notebook used `dtype=torch.double` throughout. Changed to
+`float32`: no accuracy benefit from double precision at this model size,
+and float32 is the correct starting point if a future TinyML/int8
+quantization migration happens. Both the notebook and `main.py`'s
+`MyCNN` class were updated together — this must stay in sync; a
+mismatch here reproduces the same class of load-time crash as #10.
+
+### 12. Notebook bugs found and fixed
+
+- **No `torch.save()` existed anywhere** in the original notebook —
+  every training run produced a model only in memory. Added:
+  `torch.save(model.state_dict(), 'fall_model.pth')`.
+- **`fc1`'s input size was hardcoded** (`32*5*1=160`) to the notebook's
+  own example dataset (`max_detobj=21`, i.e. 22 points/frame after
+  padding). This is not portable — different training data changes
+  `max_detobj`, which changes required `fc1` size. Formula derived from
+  the conv/pool layer arithmetic: `H1=floor((H_in-1)/2)+1,
+  H2=floor(H1/2), fc1_in=32*H2`.
+- **Inconsistent aggregation for single-file scoring**: cells scoring a
+  new/held-out file used `.values.min()` for point-padding width, while
+  training used `.values.max()` (stored as `max_detobj`). These can
+  differ across most datasets — fixed to use the stored `max_detobj`
+  consistently.
+
+### 13. Radar cfg tuning — retuned for actual physical deployment
+
+Original vendor cfg (and this project's early config) assumed a
+**ceiling-mounted**, room-scale deployment (`sensorPosition 2 0 15`,
+`maxAcceleration 0.1 0.1 0.1` tuned for near-static elderly movement).
+Actual deployment is **table-mounted, ~0.75m height, ~0.6m range,
+seated/close-range use** — a fundamentally different geometry. Retuned:
+
+| Parameter | Original | Retuned | Why |
+|---|---|---|---|
+| `sensorPosition` | `2 0 15` (ceiling, tilted) | `0.75 0 0` (table, flat) | Matches real mount height/tilt |
+| `boundaryBox` Ymin | `0.5` | `0.3` | Seated distance (~0.6m) needs lean-forward margin |
+| `maxAcceleration` | `0.1 0.1 0.1` | `2.0 2.0 2.0` | Original dropped every track on normal walking speed |
+| `stateParam` (active2freeThre) | `6` (later `12`) | `80` | Survive short stop-then-resume gaps without ID reset |
+
+**Known consequence, not fixed:** this mount cannot see a real
+standing-to-floor fall arc (Z range stays small, ~0-0.3m observed).
+Fall detection at this mount demonstrates the *algorithm*, not validated
+real-fall geometry. A genuine elder-care deployment needs the original
+ceiling-mount geometry this profile was actually designed for.
+
+### 14. MQTT/Home Assistant integration bugs (all found and fixed via live testing)
+
+- **`requirements.txt` scoping bug**: `--index-url
+  https://download.pytorch.org/whl/cpu` at the top of the file replaces
+  the default PyPI index for *every* subsequent package, not just
+  `torch` — caused `paho-mqtt` to fail resolution ("not found in the
+  package registry"). Fixed: `--extra-index-url` instead, which adds
+  rather than replaces.
+- **Docker loopback trap**: `mqtt_client.connect("127.0.0.1", ...)`
+  failed with `Connection refused` — the Python app runs in its own
+  Docker container, separate from the `mosquitto` container; `127.0.0.1`
+  inside a container means "this container," not the host. Fixed: use
+  the host machine's real LAN IP (`hostname -I`).
+- **Continuous-publish gap**: heart rate, breath rate, and fall
+  probability were only ever published on rare alert-threshold crossings
+  (`vitals_alert`, `fall_cnn` at `p>0.85`) — never as an ongoing stream.
+  Home Assistant showed "Entity is non-numeric" / "Unknown" because the
+  entities had never received *any* payload in the format they expected.
+  Fixed: every valid reading now pushes a `vitals_reading`/
+  `fall_probability` event; Thread 4 publishes these as bare numeric
+  MQTT payloads on dedicated topics, separate from the JSON-blob alert
+  topics.
+- **HA sensor config pointed at the old topics/format**: with bare
+  numeric payloads now in place, `value_template: "{{
+  value_json.heart_rate }}"` against a plain number caused the exact
+  same "non-numeric" error via a different path. Fixed:
+  `state_topic` updated to the new dedicated topics, `value_template`
+  removed entirely (payload is already a bare number).
+- **`paho-mqtt` callback API deprecation**: `mqtt.Client(client_id=...)`
+  and even `mqtt.Client(mqtt.CallbackAPIVersion.VERSION1, ...)` both
+  triggered deprecation warnings on the installed version. Fixed:
+  `CallbackAPIVersion.VERSION2` (safe here — no `on_connect`/
+  `on_message` callbacks registered that would need the new signature).
+
+### 15. Emergency dispatch automation — didn't exist, now built
+
+The webhook (`/api/webhook/emergency_dispatch`) had a real destination
+POST-ing to it, but **no Home Assistant automation existed to receive
+it** — every dispatch was a silent 404. Built a real automation:
+webhook trigger → branches on `fall_cnn` vs `vitals_alert` event type →
+`persistent_notification.create` (HA dashboard bell icon) +
+`rest_command` POST to `ntfy.sh` (free push notification to phone, no
+subscription required — chosen over Nabu Casa/official-app push, which
+now requires a paid Home Assistant Cloud subscription for real push
+delivery).
+
+### 16. Git/filesystem structure — real mess, now cleaned up
+
+A remote push restructured the repo (moved `config/`, `mosquitto/`,
+`docker-compose.yml` into a `homeassistant/` subfolder) while the local
+clone's containers still had the old-path files open — git could not
+fully unlink them (`Permission denied`), leaving stale duplicate
+copies alongside the properly-tracked new structure. Root cause of the
+permission errors throughout this cleanup: Home Assistant's Docker
+container writes its runtime files (`config/*.yaml`, `.storage/`, logs,
+`.db`) as `root`, while the local git operations run as a regular user.
+Resolved by: diffing duplicate copies before deleting either,
+`cp -a`-ing live runtime state into the tracked folder, removing the
+confirmed-untracked orphans, and using `sudo -E` for git operations that
+specifically need to touch root-owned files (preserving user identity/
+credentials via `-E`), followed by `chown -R` back to the regular user
+afterward. A `.gitignore` was added inside `config/` and `mosquitto/`
+to exclude runtime state (`.storage/`, `*.db`, logs, `.cache/`) from
+ever being committed — important since `.storage/` contains auth tokens
+and this repo is public.
+
+---
+
+## Updated Readiness Checklist
+
+| Component | Status | Basis |
+|---|---|---|
+| STM32 triple-TLV parsing | ✅ Implemented & corrected | Point cloud type fixed from 1→1020 |
+| STM32 bounding-box + sanity filtering | ✅ Implemented, extended | Now covers vitals too, not just targets |
+| STM32 DMA ingestion | ❌ Not implemented | Confirmed unavailable at sketch level |
+| Vitals TLV correctness | ✅ Correct + sanity-filtered | Struct sourced, corruption filtering added |
+| Radar cfg for vitals binary | ✅ Tested against real hardware | Retuned for table-mount geometry |
+| Linux Thread 1 (spatial/fall) | ✅ Built, tested, firing correctly | Threshold logic confirmed on real proxy falls |
+| Linux Thread 2 (CNN classifier) | ✅ Built, trained, tested | Model loads, runs, classifies; notebook bugs fixed |
+| Linux Thread 3 (vitals) | ✅ Built, sanity-filtered | Corruption rejection added post-testing |
+| Linux Thread 4 (router) | ✅ Built: MQTT + webhook + push | ntfy.sh chosen over paid Nabu Casa push |
+| Home Assistant integration | ✅ Live, confirmed working | Heart rate/breath rate/fall probability all real |
+| Emergency notification | ✅ Live, confirmed working | Persistent notification + phone push both fire |
+| CPU/RAM budget | ⚠️ Still not formally profiled | Runs acceptably in practice, no hard numbers taken |
+
+---
+
+## Known, Accepted Limitations (not bugs — real constraints)
+
+1. **Mount geometry** — table/chest-level cannot see a real fall arc;
+   demonstrates algorithm correctness, not validated real-fall accuracy.
+2. **No DMA** — architectural limit of this board at the sketch level.
+3. **UART corruption** — jumper-wire connection produces occasional
+   bit-flip errors; mitigated via sanity filtering, not physically
+   eliminated. A soldered/shielded connection would reduce this further.
+4. **Small training dataset** — model trained on self-collected proxy
+   falls, one person, one environment; generalization unverified.
+5. **ntfy.sh reliability** — free public relay, no delivery SLA; fine
+   for a demo, a real deployment would self-host or use a paid service.
