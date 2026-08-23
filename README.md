@@ -34,13 +34,18 @@ The IWR6843ISK antenna module must be mounted on the MMWAVEICBOOST carrier board
 
 The radar ships with no application firmware. It must be flashed before first use.
 
-1. **Set switches to Flashing Mode** — On the ICBOOST, configure the SOP (S1) and MUX switch banks:
+1. **Set switches for Flashing Mode** — Power off the board. On the ICBOOST, set the SOP and MUX switches to route UART to the XDS110 USB and enable flashing:
    * **SOP (S1):** SOP0 ON | SOP1 OFF | SOP2 ON
-   
-   <p align="center">
-     <img src="docs/images/flashing-sop.png" alt="Flashing SOP Switches" width="270"/>
-     <img src="docs/images/flashing-mux.png" alt="Flashing MUX Switches" width="270"/>
-   </p>
+
+<p align="center">
+  <img src="docs/images/flashing-sop.png" alt="Flashing Mode SOP Switch Configuration" width="550"/><br/>
+  <em>SOP switches set for Flashing Mode (SOP2 ON)</em>
+</p>
+
+<p align="center">
+  <img src="docs/images/flashing-mux.png" alt="Flashing Mode MUX Switch Configuration" width="550"/><br/>
+  <em>MUX switches configured to route UART to the XDS110 USB for flashing</em>
+</p>
 2. **Connect to PC** — Connect 5V/3A barrel jack power to the ICBOOST. Plug Micro-USB into the **XDS110 USB port** on the ICBOOST only.
 3. **Open UniFlash** — Select device `IWR6843ISK`. Under Settings, enter the COM port for the **Application/User UART** (visible in Windows Device Manager).
 4. **Select Binary** — Program tab → Meta Image 1 → browse to:
@@ -51,13 +56,18 @@ The radar ships with no application firmware. It must be flashed before first us
    vital_signs_tracking_6843ISK_demo.bin
    ```
 5. **Flash** — Click `Load Image`. Wait for "Success".
-6. **Set switches to Functional Mode** — Power off, then set:
+6. **Set switches for Functional Mode (Arduino UART)** — Power off, then set the switches to route UART to the hardware headers and enable functional mode:
    * **SOP (S1):** SOP0 ON | SOP1 OFF | SOP2 OFF
-   
-   <p align="center">
-     <img src="docs/images/functional-sop.png" alt="Functional SOP Switches" width="270"/>
-     <img src="docs/images/functional-mux.png" alt="Functional MUX Switches" width="270"/>
-   </p>
+
+<p align="center">
+  <img src="docs/images/functional-sop.png" alt="Functional Mode SOP Switch Configuration" width="550"/><br/>
+  <em>SOP switches set for Functional Mode (SOP2 OFF)</em>
+</p>
+
+<p align="center">
+  <img src="docs/images/functional-mux.png" alt="Functional Mode MUX Switch Configuration" width="550"/><br/>
+  <em>MUX switches configured to route UART away from USB, towards the Arduino headers</em>
+</p>
 7. Power on. The radar is now running the Vital Signs + Tracking firmware.
 
 ### 3. COM Ports
