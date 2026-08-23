@@ -324,7 +324,7 @@ All layers use `dtype=torch.float32`.
 
 ### Files
 
-*   **Model weights:** `src/mpu_linux/fall_model.pth` (loaded at path `python/fall_model.pth` relative to the working directory — run `python main.py` from `src/mpu_linux/`)
+*   **Model weights:** `python/fall_model.pth` — This path is relative to the **Arduino App Lab project root**. The application runs inside an Arduino App Lab project (see screenshot), where `main.py` and all Python files live under a `python/` subfolder. Place `fall_model.pth` in that same `python/` directory alongside `main.py`.
 *   **Training notebook:** `model_training/notebooks/FallDetection_root.ipynb`
 *   **Training data:** `model_training/data/GatheredData/` (not tracked in git — collect using the radar + Arduino setup)
 
