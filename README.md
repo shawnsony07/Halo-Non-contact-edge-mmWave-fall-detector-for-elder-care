@@ -34,8 +34,13 @@ The IWR6843ISK antenna module must be mounted on the MMWAVEICBOOST carrier board
 
 The radar ships with no application firmware. It must be flashed before first use.
 
-1. **Set SOP switches to Flashing Mode** — On the ICBOOST, locate the S1 switch bank (SOP0, SOP1, SOP2):
-   * **SOP0:** ON | **SOP1:** OFF | **SOP2:** ON
+1. **Set switches to Flashing Mode** — On the ICBOOST, configure the SOP (S1) and MUX switch banks:
+   * **SOP (S1):** SOP0 ON | SOP1 OFF | SOP2 ON
+   
+   <p align="center">
+     <img src="docs/images/flashing-sop.png" alt="Flashing SOP Switches" width="270"/>
+     <img src="docs/images/flashing-mux.png" alt="Flashing MUX Switches" width="270"/>
+   </p>
 2. **Connect to PC** — Connect 5V/3A barrel jack power to the ICBOOST. Plug Micro-USB into the **XDS110 USB port** on the ICBOOST only.
 3. **Open UniFlash** — Select device `IWR6843ISK`. Under Settings, enter the COM port for the **Application/User UART** (visible in Windows Device Manager).
 4. **Select Binary** — Program tab → Meta Image 1 → browse to:
@@ -46,8 +51,13 @@ The radar ships with no application firmware. It must be flashed before first us
    vital_signs_tracking_6843ISK_demo.bin
    ```
 5. **Flash** — Click `Load Image`. Wait for "Success".
-6. **Set SOP switches to Functional Mode** — Power off, then set:
-   * **SOP0:** ON | **SOP1:** OFF | **SOP2:** OFF
+6. **Set switches to Functional Mode** — Power off, then set:
+   * **SOP (S1):** SOP0 ON | SOP1 OFF | SOP2 OFF
+   
+   <p align="center">
+     <img src="docs/images/functional-sop.png" alt="Functional SOP Switches" width="270"/>
+     <img src="docs/images/functional-mux.png" alt="Functional MUX Switches" width="270"/>
+   </p>
 7. Power on. The radar is now running the Vital Signs + Tracking firmware.
 
 ### 3. COM Ports
