@@ -3,6 +3,13 @@
   <em>Halo: Privacy-First Non-Contact Edge mmWave Fall Detector</em>
 </p>
 
+<p align="center">
+  <a href="https://youtu.be/ZC6olin9W7g" target="_blank">
+    <img src="https://img.youtube.com/vi/ZC6olin9W7g/maxresdefault.jpg" alt="Halo Demo Video" width="700"/>
+  </a><br/>
+  <em>▶ Watch the demo — 2 m wall-mount deployment, live fall detection and ntfy alerts</em>
+</p>
+
 # Halo: Non-Contact Edge mmWave Fall Detector for Elder Care
 
 Halo is a privacy-first, non-contact monitoring system for elder care facilities and private homes. It uses a Texas Instruments IWR6843ISK mmWave radar sensor to detect falls, track presence, and extract vital signs — no cameras, no wearables, no cloud dependency.
