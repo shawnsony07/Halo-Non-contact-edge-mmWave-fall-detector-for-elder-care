@@ -233,6 +233,11 @@ To run:
 2. Click **Run** (top-right). App Lab flashes the sketch to the STM32 and starts `python/main.py` on the Linux MPU simultaneously.
 3. The **App launch** tab shows the STM32 flash and GDB session output. The **Python** tab shows `main.py` stdout.
 
+<p align="center">
+  <img src="docs/images/app_lab_live_output.png?v=1" alt="Arduino App Lab live terminal output showing all 4 threads running, MQTT connected, vitals and CNN classification" width="800"/><br/>
+  <em>Arduino App Lab Python terminal — 4 threads active, MQTT connected, live vitals (Heart Rate: 73.7 bpm, Breath Rate: 15.1 bpm) and CNN classifications streaming in real time</em>
+</p>
+
 All output files (`events.jsonl`, `pointcloud_log.csv`) are written inside the `python/` folder.
 
 #### Option B: Standalone (without App Lab)
@@ -249,7 +254,7 @@ pip install -r requirements.txt
 > [!WARNING]
 > Do **not** change `--extra-index-url` to `--index-url`. The latter **replaces** the default PyPI index for the entire file, causing `paho-mqtt` and other standard packages to fail resolution. `--extra-index-url` *adds* to PyPI, it does not replace it.
 
-Set the serial port in `main.py` to your Arduino's USB device path (`COM3` on Windows, `/dev/ttyACM0` on Linux), then:
+The RouterBridge connection is internal to the board — `main.py` communicates with the STM32 over the on-board UART bridge, **not** a USB serial port. No serial port path needs to be set. Then:
 
 ```bash
 python main.py
