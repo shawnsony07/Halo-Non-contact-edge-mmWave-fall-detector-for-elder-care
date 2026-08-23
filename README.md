@@ -159,6 +159,11 @@ The default vendor config (`vital_signs_ISK_6m.cfg`) is tuned for a **ceiling-mo
 
 **Arduino UNO Q — Dual-Processor Architecture:**
 
+<p align="center">
+  <img src="docs/images/unoq.png" alt="Arduino UNO Q board" width="550"/><br/>
+  <em>Arduino UNO Q — dual-processor board with STM32H573 MCU (top) and Linux MPU (bottom)</em>
+</p>
+
 The Arduino UNO Q contains two processors on a single board:
 
 | Processor | Core | Role |
