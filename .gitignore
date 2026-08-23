@@ -4,3 +4,7 @@ home-assistant_v2.db-shm
 *.log
 __pycache__/
 mosquitto/data/
+
+# Documentation and planning
+PROJECT_JOURNAL.md
+architecture.txt
