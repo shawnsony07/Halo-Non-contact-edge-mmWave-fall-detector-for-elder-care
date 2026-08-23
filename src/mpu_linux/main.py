@@ -409,8 +409,8 @@ _recent_events_lock = threading.Lock()
 # or the other containers. Use the HOST MACHINE's real LAN IP (run
 # `hostname -I` on the host to find it) since mosquitto's port is published
 # there, not reachable via any container's own 127.0.0.1.
-WEBHOOK_URL = "http://192.168.x.x:8123/api/webhook/emergency_dispatch"
-MQTT_BROKER_IP = "192.168.x.x"
+WEBHOOK_URL = "http://192.168.1.15:8123/api/webhook/emergency_dispatch"
+MQTT_BROKER_IP = "192.168.1.15"
 MQTT_PORT = 1883
 MQTT_TOPIC_FALL = "eldercare/radar/falls"
 MQTT_TOPIC_VITALS = "eldercare/radar/vitals"
