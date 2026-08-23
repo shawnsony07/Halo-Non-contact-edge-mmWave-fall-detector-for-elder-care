@@ -3,8 +3,8 @@ graph LR
     classDef board fill:#ffffff,stroke:#005c66,stroke-width:2px,color:#000,rx:10,ry:10;
     
     %% Define Nodes with Images
-    UNO["<img src='../images/unoq.png' width='180'/><br/><b>Arduino UNO Q</b>"]:::board
-    RADAR["<img src='../images/mmwaveicboost.png' width='180'/><br/><b>MMWAVEICBOOST (IWR6843ISK)</b>"]:::board
+    UNO["<img src='https://raw.githubusercontent.com/shawnsony07/Halo-Non-contact-edge-mmWave-fall-detector-for-elder-care/main/docs/images/unoq.png' width='180'/><br/><b>Arduino UNO Q</b>"]:::board
+    RADAR["<img src='https://raw.githubusercontent.com/shawnsony07/Halo-Non-contact-edge-mmWave-fall-detector-for-elder-care/main/docs/images/mmwaveicboost.png' width='180'/><br/><b>MMWAVEICBOOST (IWR6843ISK)</b>"]:::board
 
     %% Define Connections
     UNO -->|"<b>Config UART (115200 Baud)</b><br/>D1 (TX) ➔ J5 Pin 5 (RS232RX)"| RADAR
