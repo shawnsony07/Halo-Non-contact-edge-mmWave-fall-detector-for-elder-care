@@ -416,7 +416,7 @@ All layers use `dtype=torch.float32`.
 
 *   **Model weights:** `python/fall_model.pth` — This path is relative to the **Arduino App Lab project root**. The application runs inside an Arduino App Lab project (see screenshot), where `main.py` and all Python files live under a `python/` subfolder. Place `fall_model.pth` in that same `python/` directory alongside `main.py`.
 *   **Training notebook:** `model_training/notebooks/FallDetection_root.ipynb`
-*   **Training data:** `model_training/data/GatheredData/` (not tracked in git — collect using the radar + Arduino setup)
+*   **Training data:** `model_training/data/GatheredData/` (pulled from https://github.com/sareebali/mmwave-radar-fall-detection.git)
 
 ---
 
@@ -431,7 +431,7 @@ All layers use `dtype=torch.float32`.
 │   ├── config/               # Home Assistant configuration
 │   └── mosquitto/config/     # Mosquitto broker configuration
 ├── model_training/
-│   ├── data/                 # Pointcloud capture CSVs (not git-tracked)
+│   ├── data/                 # Pointcloud capture CSVs (pulled from sareebali/mmwave-radar-fall-detection)
 │   └── notebooks/            # FallDetection_root.ipynb
 └── src/
     ├── mcu_arduino/          # sketch.ino — TLV parser + radar config + bridge
