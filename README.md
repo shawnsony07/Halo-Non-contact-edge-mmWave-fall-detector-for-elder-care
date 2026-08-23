@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/images/logo.jpg" alt="Halo Logo" width="160"/>
+  <img src="docs/images/logo.png" alt="Halo Logo" width="160"/>
 </p>
 
 # Halo: Non-Contact Edge mmWave Fall Detector for Elder Care
