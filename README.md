@@ -4,16 +4,17 @@
 
 # Halo: Non-Contact Edge mmWave Fall Detector for Elder Care
 
-Halo is a privacy-first, non-contact monitoring system designed for elder care facilities and private homes. By leveraging high-frequency mmWave radar technology, it provides highly accurate fall detection, presence tracking, and vital signs monitoring without the use of invasive cameras or wearable devices. 
+Halo is a privacy-first, non-contact monitoring system for elder care facilities and private homes. It uses a Texas Instruments IWR6843ISK mmWave radar sensor to detect falls, track presence, and extract vital signs — no cameras, no wearables, no cloud dependency.
 
-This repository contains the hardware integration, edge-processing logic, and machine learning models required to run the Halo system locally on edge devices.
+This repository contains the MCU firmware (Arduino UNO Q), the Linux edge application (Python, 4-thread), the trained PyTorch fall detection model, and the Home Assistant + Mosquitto dashboard stack.
 
 ## 🌟 Key Features
 
-*   **Privacy-First Design:** Complete absence of optical cameras; only abstract point cloud data and bounding boxes are processed.
-*   **Edge Computing:** No constant cloud uplink required for detection—minimizes latency and removes privacy concerns related to raw data transmission.
-*   **Vital Signs Monitoring:** Real-time heart rate and breathing rate extraction computed directly on the radar chip.
-*   **Robust Fall Detection:** Utilizes a PyTorch-based neural network trained on point cloud dynamics to classify activities and detect falls.
+*   **Privacy-First:** No optical sensors. Only abstract 3D point clouds and bounding boxes are processed. Raw radar data never leaves the device.
+*   **Fully On-Edge:** All inference runs locally on the Linux MPU. No cloud uplink is required for detection.
+*   **Vital Signs Monitoring:** Heart rate and breathing rate are computed on the radar chip itself (TI's Vital Signs firmware). The host only consumes the pre-calculated values.
+*   **Fall Detection:** A PyTorch CNN (`MyCNN`) classifies 25-frame rolling windows of point cloud data and emits a binary Fall/Not-Fall prediction with a confidence score.
+*   **Real-Time Alerting:** Confirmed falls (`p > 0.85`) and sustained breath-rate anomalies trigger MQTT publishes and HTTP webhooks to Home Assistant, which dispatches ntfy push notifications to a phone.
 
 ---
 
@@ -21,54 +22,58 @@ This repository contains the hardware integration, edge-processing logic, and ma
 
 <p align="center"><img src="docs/images/iwr-on-mmwaveicboost.png" alt="IWR6843ISK on mmWaveICBoost" width="550"/></p>
 
-This project requires a Texas Instruments **IWR6843ISK** mmWave Radar mounted on the **MMWAVEICBOOST** carrier board for connecting via UART and other communication interfaces. We utilize the "Vital Signs with People Tracking" firmware to extract raw point cloud data, tracker target lists, and vital signs in a single unified data stream.
+The IWR6843ISK antenna module must be mounted on the MMWAVEICBOOST carrier board. The ICBOOST provides the XDS110 debug/flash interface, barrel jack power input, and the RS-232 level-shifted UART headers (J5, J6) used for Arduino communication. Do not use the USB port on the green ISK antenna board for flashing or data — only the XDS110 USB port on the ICBOOST.
 
 ### 1. Prerequisites & Downloads
-Before starting, ensure you have the following downloaded and installed:
-1. **TI Radar Toolbox**: Download `radar_toolbox_3_30_00_06` (or the latest) from the [TI Resource Explorer](https://dev.ti.com/tirex/explore/node?node=A__AEIJm0rwIeU.2P1OBWwlaA__radar_toolbox__1AslXXD__LATEST). Extract this to your `C:\ti\` folder.
-2. **TI UniFlash**: Download and install [UniFlash](https://www.ti.com/tool/UNIFLASH) to write the firmware to the radar.
-3. **XDS110 Drivers**: Because you are using the MMWAVEICBOOST, you need the TI XDS110 drivers (these are usually installed automatically when you install UniFlash).
+
+1. **TI Radar Toolbox** — Download `radar_toolbox_3_30_00_06` from the [TI Resource Explorer](https://dev.ti.com/tirex/explore/node?node=A__AEIJm0rwIeU.2P1OBWwlaA__radar_toolbox__1AslXXD__LATEST). Extract to `C:\ti\`.
+2. **TI UniFlash** — Download and install from [ti.com/tool/UNIFLASH](https://www.ti.com/tool/UNIFLASH). Required to flash the radar firmware binary.
+3. **XDS110 Drivers** — Installed automatically by UniFlash. Required because the ICBOOST uses the XDS110 USB-to-UART bridge, not a standard USB CDC device.
 
 ### 2. Flashing the Firmware
-The radar must be flashed with the pre-built binary included in the TI Toolbox.
 
-1. **Set to Flashing Mode**: On the MMWAVEICBOOST board, locate the **S1** switch bank (labeled SOP0, SOP1, SOP2). Set them to Flashing Mode:
-   * **SOP0:** ON
-   * **SOP1:** OFF
-   * **SOP2:** ON
-2. **Connect to PC**:
-   * Connect a 5V/3A barrel jack power supply to the ICBOOST.
-   * Plug a Micro-USB cable into the **XDS110 USB port** on the ICBOOST board *(Do not plug into the USB port on the green ISK antenna board)*.
-3. **Open UniFlash**:
-   * Select your device as `IWR6843ISK`.
-   * Go to Settings and enter the COM port number for your **Application/User UART** (find this in Windows Device Manager).
-4. **Select Binary**: Navigate to the Program tab. For Meta Image 1, browse to your TI folder and select the binary:
-   * `C:\ti\radar_toolbox_3_30_00_06\radar_toolbox_3_30_00_06\source\ti\examples\Industrial_and_Personal_Electronics\Vital_Signs\Vital_Signs_With_People_Tracking\prebuilt_binaries\vital_signs_tracking_6843ISK_demo.bin`
-5. **Flash**: Click `Load Image`. Wait for the "Success" message at the bottom of the screen.
-6. **Set to Functional Mode**: Disconnect the 5V power, flip the SOP switches back to Functional Mode, and plug the power back in:
-   * **SOP0:** ON
-   * **SOP1:** OFF
-   * **SOP2:** OFF
+The radar ships with no application firmware. It must be flashed before first use.
 
-### 3. Understanding the COM Ports
-When plugged into the XDS110 USB port, the MMWAVEICBOOST enumerates as two separate COM ports in your Windows Device Manager under "Ports (COM & LPT)":
-* **XDS110 Class Application/User UART (CFG_PORT):** Operates at `115200` baud. Used to send the `.cfg` file text commands to the radar to start the sensor.
-* **XDS110 Class Auxiliary Data Port (DATA_PORT):** Operates at `921600` baud. Used by the radar to blast the binary TLV (Type-Length-Value) packets containing the point cloud, tracker, and vital signs data back to the PC.
+1. **Set SOP switches to Flashing Mode** — On the ICBOOST, locate the S1 switch bank (SOP0, SOP1, SOP2):
+   * **SOP0:** ON | **SOP1:** OFF | **SOP2:** ON
+2. **Connect to PC** — Connect 5V/3A barrel jack power to the ICBOOST. Plug Micro-USB into the **XDS110 USB port** on the ICBOOST only.
+3. **Open UniFlash** — Select device `IWR6843ISK`. Under Settings, enter the COM port for the **Application/User UART** (visible in Windows Device Manager).
+4. **Select Binary** — Program tab → Meta Image 1 → browse to:
+   ```
+   C:\ti\radar_toolbox_3_30_00_06\radar_toolbox_3_30_00_06\source\ti\examples\
+   Industrial_and_Personal_Electronics\Vital_Signs\
+   Vital_Signs_With_People_Tracking\prebuilt_binaries\
+   vital_signs_tracking_6843ISK_demo.bin
+   ```
+5. **Flash** — Click `Load Image`. Wait for "Success".
+6. **Set SOP switches to Functional Mode** — Power off, then set:
+   * **SOP0:** ON | **SOP1:** OFF | **SOP2:** OFF
+7. Power on. The radar is now running the Vital Signs + Tracking firmware.
 
-### 4. Configuring and Getting Data
-To tell the radar to start broadcasting data, you must send it a configuration file over the CFG_PORT.
+### 3. COM Ports
 
-**The Config File:**
-We use the `vital_signs_ISK_6m.cfg` file, located here:
-`C:\ti\radar_toolbox_3_30_00_06\radar_toolbox_3_30_00_06\source\ti\examples\Industrial_and_Personal_Electronics\Vital_Signs\Vital_Signs_With_People_Tracking\chirp_configs\`
+When the ICBOOST is connected via XDS110 USB, Windows enumerates **two** COM ports under "Ports (COM & LPT)":
 
-**Starting the Data Stream:**
-You have two options to send this config and view the data:
+| Port | Name in Device Manager | Baud | Purpose |
+|---|---|---|---|
+| CFG_PORT | XDS110 Class Application/User UART | 115200 | Send `.cfg` commands to start the sensor |
+| DATA_PORT | XDS110 Class Auxiliary Data Port | 921600 | Receive binary TLV telemetry stream |
 
-* **Option A (GUI Visualizer):**
-  Run the Industrial Visualizer executable located in the radar toolbox at `\tools\visualizers\Industrial_Visualizer`. Select the correct XDS110 COM ports, select the "Vital Signs with People Tracking" lab, load the `vital_signs_ISK_6m.cfg` file, and click Start.
-* **Option B (Python Script):**
-  When running our custom Python data collection script, you will specify the COM port numbers and the path to `vital_signs_ISK_6m.cfg`. The script opens the CFG_PORT (Application/User UART), reads the `.cfg` file line-by-line, and sends it to the radar. Immediately after, it opens the DATA_PORT (Auxiliary Data Port) to capture the incoming point cloud and vital signs streams for ML processing.
+### 4. Radar Configuration
+
+The radar is stateless at power-on. It must receive a complete configuration file over CFG_PORT before it will emit any data.
+
+**Config file used:**
+```
+C:\ti\radar_toolbox_3_30_00_06\radar_toolbox_3_30_00_06\source\ti\examples\
+Industrial_and_Personal_Electronics\Vital_Signs\
+Vital_Signs_With_People_Tracking\chirp_configs\vital_signs_ISK_6m.cfg
+```
+
+**Sending the config — two options:**
+
+* **Option A (GUI):** Run the Industrial Visualizer at `\tools\visualizers\Industrial_Visualizer` in the toolbox. Select the correct XDS110 COM ports, select the "Vital Signs with People Tracking" lab, load `vital_signs_ISK_6m.cfg`, and click Start.
+* **Option B (Arduino sketch):** The `sketch.ino` firmware embeds the full config as a `const char* radarConfig[]` array. At boot, it sends each line to the radar over Serial1 (115200 baud) with a 5-second delay for radar boot time. No manual config step is required when the Arduino is in use.
 
 ---
 
@@ -80,95 +85,126 @@ You have two options to send this config and view the data:
 
 <p align="center"><img src="docs/images/Arduino-UNO-Q-pinout.png" alt="Arduino UNO Q Pinout" width="550"/></p>
 
-**Hardware Connections (Arduino UNO Q to IWR6843ISK / mmWaveICBoost):**
-*   **Power & Ground:**
-    *   **UNO Q GND** $\rightarrow$ **Header J5 Pin 4 (GND)** (Mandatory common ground reference for UART signal integrity).
-    *   *Note:* The mmWaveICBoost should use its dedicated 5V power source, isolated from the Arduino power logic.
-*   **Configuration UART (115200 baud):**
-    *   **UNO Q D0 (USART1_RX)** $\rightarrow$ **Header J5 Pin 3 (RS232TX)**: Transmits data from the radar out to the Arduino's MCU receive pin.
-    *   **UNO Q D1 (USART1_TX)** $\rightarrow$ **Header J5 Pin 5 (RS232RX)**: Transmits configuration and commands from the Arduino out to the radar's receive pin.
-*   **High-Speed Data UART (921600 baud):**
-    *   **UNO Q RX (Hardware Serial)** $\rightarrow$ **Header J6 Pin 9 (Data TX)**: Dedicated telemetry stream for high-throughput TLV packets (Type 1010 targets, Type 1 point cloud, and Type 1040 vitals).
+The Arduino UNO Q (STM32-based) bridges the ICBOOST's UART headers to the Linux host over USB. It parses the raw TLV binary stream from the radar and re-emits three separate structured channels over the `Arduino_RouterBridge` protocol.
+
+**Wiring (Arduino UNO Q ↔ MMWAVEICBOOST):**
+
+| Arduino Pin | ICBOOST Header | Direction | Baud | Purpose |
+|---|---|---|---|---|
+| GND | J5 Pin 4 (GND) | — | — | Common ground. Required for UART signal integrity. |
+| D0 (USART1_RX) | J5 Pin 3 (RS232TX) | Radar → Arduino | 115200 | Config UART receive (CFG channel) |
+| D1 (USART1_TX) | J5 Pin 5 (RS232RX) | Arduino → Radar | 115200 | Config UART transmit (sends `.cfg` commands) |
+| RX (Hardware Serial) | J6 Pin 9 (Data TX) | Radar → Arduino | 921600 | High-speed TLV data stream |
+
+> [!IMPORTANT]
+> Power the ICBOOST from its dedicated 5V/3A barrel jack. Do **not** attempt to power it from the Arduino's 5V pin. The radar draws up to 3A at peak; the Arduino's regulator cannot supply this.
 
 **Flashing the Arduino:**
-1. Open `src/mcu_arduino/sketch.ino` in the Arduino IDE.
-2. Select your STM32 / Arduino UNO Q board configuration.
-3. Flash the firmware to enable the TLV parser and bridge channels.
+1. Open `src/mcu_arduino/sketch.ino` in Arduino IDE.
+2. Install the `Arduino_RouterBridge` library if not already present.
+3. Select board: **Arduino UNO R4 / UNO Q (STM32)**.
+4. Flash. The sketch will configure the radar automatically on boot.
 
 ### 2. Linux MPU Setup
-1. Navigate to the Python application directory:
-   ```bash
-   cd src/mpu_linux
-   ```
-2. Install the required dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. Run the main multi-threaded application:
-   ```bash
-   python main.py
-   ```
 
-*(Ensure the Arduino is connected via USB/Serial and the port is correctly mapped in `main.py`).*
+The Python application requires Python 3.8+ and the `arduino` bridge package (provided by the `Arduino_RouterBridge` host library).
+
+```bash
+cd src/mpu_linux
+pip install -r requirements.txt
+```
+
+`requirements.txt` uses `--extra-index-url https://download.pytorch.org/whl/cpu` so `torch` is pulled from TI's CPU-only wheel index. Standard PyPI packages (`requests`, `paho-mqtt`, `numpy`) resolve from the default index alongside it.
+
+Before running, set the serial port in `main.py` to match your Arduino's USB device path (e.g. `COM3` on Windows, `/dev/ttyACM0` on Linux). Then:
+
+```bash
+python main.py
+```
+
+The application prints per-thread startup confirmations and a diagnostic counter every 100 pointcloud batches. If `[Thread2] First pointcloud batch received` does not appear within ~5 seconds of start, the radar is not emitting data — verify the SOP switch state and CFG_PORT connection.
 
 ---
 
 ## 🏗️ System Architecture
 
-The Halo system architecture is distributed across three primary compute tiers: the Radar Sensor, the Real-Time Coprocessor, and the Linux Application MPU.
-
 <p align="center"><img src="docs/diagrams/architecture.png" alt="System Architecture" width="550"/></p>
 
-### 1. Hardware Stack
+The system has three compute tiers:
 
-*   **Texas Instruments IWR6843ISK:** A 60-GHz to 64-GHz mmWave sensor. Flashed with the Vital Signs + Tracking firmware from the TI Radar Toolbox.
-*   **mmWaveICBoost Carrier:** Provides standard interfaces, debugging capabilities, and bridges the high-speed telemetry to the coprocessor.
-*   **Arduino UNO Q (STM32 MCU):** Acts as the real-time telemetry ingester and parser.
+*   **Tier 1 — Radar Sensor (IWR6843ISK):** Runs TI's Vital Signs + Tracking firmware on-chip. Outputs pre-clustered target lists, compressed point clouds, and pre-computed heart/breath rates over UART at 921600 baud.
+*   **Tier 2 — Real-Time Coprocessor (Arduino UNO Q / STM32):** Parses the raw binary TLV stream in real time. Applies spatial bounding-box pruning and sanity validation, then re-emits three structured channels (`radar_targets`, `radar_vitals`, `radar_pointcloud`) to the Linux host over USB.
+*   **Tier 3 — Linux Application MPU (Python):** Four-thread application that consumes the three channels, runs fall detection inference, and dispatches alerts.
 
 ---
 
 ## 📡 Data Pipeline & Telemetry
 
-The TI radar streams a highly condensed raw binary telemetry output. The STM32 microcontroller is responsible for parsing this real-time stream into actionable structural data.
-
-### The Parsing Engine
-
-The telemetry is formatted using Type-Length-Value (TLV) packets. The MCU implements a custom parser based on `parseTLVs.py` specifications to decode three primary structs:
-
-1.  **Point Cloud (Type 1):** Returns the 3D spatial points $(X, Y, Z)$ and Doppler velocity of moving subjects.
-2.  **Target List (Type 1010):** Returns the tracked targets, handled by the IWR6843's on-chip grouping and tracking algorithms.
-3.  **Vitals (Type 1040):** Returns pre-calculated, filtered heart rate and respiration rate values.
-
 <p align="center"><img src="docs/diagrams/data_flow.png" alt="Data Pipeline &amp; Telemetry" width="550"/></p>
 
-### Spatial Filtering and Defensive Bounds
+The radar streams binary TLV (Type-Length-Value) packets at each frame interval. Each packet begins with an 8-byte magic word (`0x02 0x01 0x04 0x03 0x06 0x05 0x08 0x07`) followed by a 40-byte header, then one or more TLV payloads.
 
-Because edge MPUs have limited resources, the MCU implements physical world constraints *before* passing data upstream:
-*   **Bounding-Box Pruning:** Points that fall outside the defined physical room bounds are instantly dropped to prevent ghosting or processing artifacts.
-*   **Sanity Caps:** The parser strictly enforces maximum points per TLV, maximum TLVs per frame, and absolute packet-length sanity to prevent buffer overruns or segmentation faults in the Linux MPU.
+### TLV Types Parsed by the Sketch
+
+| TLV Type | Content | Output Channel |
+|---|---|---|
+| **1** | Raw point cloud: `(frameNum, x, y, z, doppler_velocity)` per point | `radar_pointcloud` |
+| **1010** | Tracked target list: `(frameNum, tid, x, y, z)` per target (112-byte struct: 1× uint32 + 27× float) | `radar_targets` |
+| **1020** | Compressed point cloud: encoded as `(elev, azim, doppler, range)` int8/int16 with per-frame scale units | `radar_pointcloud` |
+| **1040** | Vitals: `(id, rangeBin, breathDeviation, heartRate, breathRate)` | `radar_vitals` |
+
+Types 1011, 1012 are parsed but not forwarded. Any other TLV type aborts the remainder of that frame immediately.
+
+### On-Device Bounding Box & Sanity Filtering
+
+All filtering runs on the Arduino before data reaches the Linux host. The active spatial bounds (matching `boundaryBox` in the radar config):
+
+| Axis | Min | Max |
+|---|---|---|
+| X | −4.0 m | 4.0 m |
+| Y | 0.3 m | 6.0 m |
+| Z | 0.0 m | 3.0 m |
+
+Points outside these bounds are silently dropped. Per-frame sanity limits: max 200 points per TLV, max packet length 16384 bytes, max 20 TLVs per frame. Vitals records with heart rate outside [30, 220] bpm, breath rate outside [3, 60] bpm, or `|breathDeviation| > 100` are rejected as UART corruption.
 
 ---
 
 ## 🧠 Linux Application MPU Architecture
 
-The downstream Linux application (implemented in Python) acts as the brain of the edge device. To ensure real-time latency, it uses a 4-Thread architecture.
-
 <p align="center"><img src="docs/diagrams/process_threads.png" alt="Linux Application MPU Architecture" width="550"/></p>
+
+The Python application uses four daemon threads. All Bridge callbacks do nothing except enqueue raw bytes into `queue.Queue` objects — parsing never blocks receive.
 
 ### Thread Breakdown
 
-*   **Thread 1: Spatial Engine:** Consumes the `radar_targets` channel. Uses the pre-tracked target lists from the TI chip, or performs custom DBSCAN/K-Means clustering on the `radar_pointcloud` if the on-chip tracker loses confidence.
-*   **Thread 2: Activity Classifier:** Consumes the `radar_pointcloud` channel. Aggregates data into a rolling-window time-series tensor. This tensor is fed into the PyTorch Neural Network (`fall_model.pth`) to classify activities and trigger Fall Detection alerts.
-*   **Thread 3: Vitals Consumer:** Consumes the `radar_vitals` channel. The phase-shift algorithms run on the TI radar, so this thread is purely responsible for smoothing, formatting, and thresholding critical heart and breath rate deviations.
-*   **Thread 4: Router & Dashboard:** The event aggregator and transport layer. All events are appended to a local `events.jsonl` log file (the black box). Critical events are then dispatched over two transports:
-    *   **MQTT** — Three dedicated topics carry live numeric payloads: `eldercare/radar/heart_rate`, `eldercare/radar/breath_rate`, and `eldercare/radar/fall_probability`. A fourth topic (`eldercare/radar/falls`) carries full JSON blobs for fall history logging. A local Mosquitto broker (see `homeassistant/`) subscribes and feeds these directly into Home Assistant sensors.
-    *   **Webhook** — Falls with `p > 0.85` and all vitals alerts trigger an HTTP POST to the Home Assistant webhook endpoint (`/api/webhook/emergency_dispatch`), where an automation dispatches HA persistent notifications and **ntfy push notifications** to your phone.
+*   **Thread 1 — Spatial Engine:** Consumes `radar_targets`. Each target record is a 20-byte struct (`<2I3f`: frameNum, tid, x, y, z). Maintains `active_targets` dict keyed by tid. Runs `check_fall()` per target per frame. A target must appear in at least 2 consecutive frames (`REQUIRED_CONSECUTIVE_FRAMES = 2`) before it is tracked.
+
+*   **Thread 2 — Activity Classifier:** Consumes `radar_pointcloud`. Each record is a 20-byte struct (`<I4f`: frameNum, x, y, z, doppler). Accumulates a rolling window of 25 frames (`MODEL_WINDOW_FRAMES = 25`), padded to 22 points per frame (`MODEL_MAX_POINTS = 22`) using zero-padding. On each complete window, runs `MyCNN` inference and publishes `fall_probability` to MQTT and the event queue. Falls with `p > 0.85` additionally publish `fall_cnn`.
+
+*   **Thread 3 — Vitals Consumer:** Consumes `radar_vitals`. Each record is a 16-byte struct (`<2H3f`: id, rangeBin, breathDeviation, heartRate, breathRate). Applies the same sanity bounds as the sketch. Publishes every valid reading as `vitals_reading` to MQTT. If `breathRate` stays at 0 for ≥ 15 seconds (`VITALS_ZERO_BREATH_ALERT_SEC = 15.0`), emits `vitals_alert`.
+
+*   **Thread 4 — Event Router:** Consumes `event_queue`. Appends every event to `python/events.jsonl`. Routes by event type:
+    *   `vitals_reading` → MQTT `eldercare/radar/heart_rate` + `eldercare/radar/breath_rate` (bare float)
+    *   `fall_probability` → MQTT `eldercare/radar/fall_probability` (bare float)
+    *   `fall_cnn` (`p > 0.85`) → MQTT `eldercare/radar/falls` (JSON) + HTTP POST to HA webhook
+    *   `vitals_alert` → MQTT `eldercare/radar/vitals` (JSON) + HTTP POST to HA webhook
+
+### Fall Detection Thresholds (Thread 1)
+
+These are mount-position dependent. Retune if the sensor height or angle changes.
+
+| Constant | Value | Meaning |
+|---|---|---|
+| `FALL_DROP_THRESHOLD_M` | 0.4 m | Minimum Z drop within the window to flag a fall candidate |
+| `FALL_WINDOW_FRAMES` | 20 | Number of frames in the Z-history deque per target |
+| `FALL_FLOOR_Z_M` | 0.3 m | Z must settle at or below this value to confirm a fall |
+| `FALL_SETTLE_FRAMES` | 15 | Consecutive frames at floor-level required before alert fires |
 
 ---
 
 ## 🏠 Home Assistant & Dashboard Integration
 
-The `homeassistant/` directory contains a complete, self-contained stack for deploying the Halo dashboard using **Docker Compose**. It runs two containers side-by-side: a Home Assistant instance and a Mosquitto MQTT broker.
+The `homeassistant/` directory is a self-contained Docker Compose stack. It runs Home Assistant and a Mosquitto MQTT broker on the same host.
 
 ### Directory Structure
 
@@ -176,46 +212,44 @@ The `homeassistant/` directory contains a complete, self-contained stack for dep
 homeassistant/
 ├── docker-compose.yml          # Orchestrates HA + Mosquitto containers
 ├── config/
-│   ├── configuration.yaml      # HA core config: MQTT sensors + includes
-│   ├── automations.yaml        # Emergency dispatch: fall + vitals webhook → ntfy push
-│   ├── scripts.yaml            # Placeholder for HA scripts
-│   ├── scenes.yaml             # Placeholder for HA scenes
-│   └── secrets.yaml            # Secret store (do NOT commit real secrets)
+│   ├── configuration.yaml      # HA core config: MQTT sensors + rest_command for ntfy
+│   ├── automations.yaml        # Emergency dispatch: fall_cnn + vitals_alert → ntfy push
+│   ├── scripts.yaml            # (empty placeholder)
+│   ├── scenes.yaml             # (empty placeholder)
+│   └── secrets.yaml            # Secret store — do NOT commit real credentials
 └── mosquitto/
     └── config/
-        └── mosquitto.conf      # Mosquitto broker config
+        └── mosquitto.conf      # Broker config: port 1883, anonymous, persistent
 ```
 
 ### 1. Running the Stack
-
-Ensure Docker and Docker Compose are installed, then from the `homeassistant/` directory:
 
 ```bash
 cd homeassistant
 docker compose up -d
 ```
 
-Home Assistant will be available at `http://<host-ip>:8123`.
+Home Assistant is available at `http://<host-ip>:8123`.
 
 ### 2. Mosquitto MQTT Broker
 
-The broker is configured in [`mosquitto/config/mosquitto.conf`](homeassistant/mosquitto/config/mosquitto.conf):
+Configured in [`mosquitto/config/mosquitto.conf`](homeassistant/mosquitto/config/mosquitto.conf):
 
 | Setting | Value |
 |---|---|
 | Port | `1883` |
-| Authentication | Anonymous (open — use on a trusted LAN only) |
-| Persistence | Enabled — data stored in `/mosquitto/data/` |
+| Authentication | Anonymous (`allow_anonymous true`) |
+| Persistence | Enabled — stored in `/mosquitto/data/` |
 | Logging | File — `/mosquitto/log/mosquitto.log` |
 
 > [!WARNING]
-> `allow_anonymous true` is set for ease of local development. For a production elder-care deployment, enable password authentication in `mosquitto.conf` and update `secrets.yaml` accordingly.
+> `allow_anonymous true` is intentional for local LAN use. For a production deployment, enable password authentication in `mosquitto.conf`.
 
 ### 3. Home Assistant MQTT Sensors
 
-The [`config/configuration.yaml`](homeassistant/config/configuration.yaml) pre-defines three sensors. Each subscribes to its own dedicated topic carrying a **bare numeric value** (not JSON) — this is required for HA to cast the payload as a number:
+Defined in [`config/configuration.yaml`](homeassistant/config/configuration.yaml). Each sensor subscribes to a dedicated topic carrying a **bare numeric payload** (not JSON). This is required — HA's MQTT sensor cannot cast a JSON blob to a numeric state without an explicit `value_template`.
 
-| Sensor | MQTT Topic | Unit |
+| Sensor Name | MQTT Topic | Unit |
 |---|---|---|
 | Radar Heart Rate | `eldercare/radar/heart_rate` | bpm |
 | Radar Breath Rate | `eldercare/radar/breath_rate` | bpm |
@@ -223,75 +257,95 @@ The [`config/configuration.yaml`](homeassistant/config/configuration.yaml) pre-d
 
 ### 4. Emergency Dispatch Automation & ntfy Push Notifications
 
-The [`config/automations.yaml`](homeassistant/config/automations.yaml) defines the `Radar Emergency Dispatch` automation, triggered by the `emergency_dispatch` webhook. It handles two event types:
+The [`config/automations.yaml`](homeassistant/config/automations.yaml) defines the `Radar Emergency Dispatch` automation. It is triggered by HTTP POST to `/api/webhook/emergency_dispatch` (webhook ID: `emergency_dispatch`, methods: POST, `local_only: false`). It runs in `parallel` mode to handle simultaneous events.
 
-| Trigger (`trigger.json.type`) | Action |
-|---|---|
-| `fall_cnn` | Creates a HA persistent notification + sends an **ntfy push** with fall confidence % and timestamp |
-| `vitals_alert` | Creates a HA persistent notification + sends an **ntfy push** with no-breath-detected duration |
+| `trigger.json.type` | HA Action | ntfy Action |
+|---|---|---|
+| `fall_cnn` | `persistent_notification.create` with confidence % and timestamp | Push: "Fall Detected — X% confidence at HH:MM:SS" |
+| `vitals_alert` | `persistent_notification.create` with duration and target ID | Push: "No breath rate for Xs (ID N) at HH:MM:SS" |
 
-**ntfy** is a free, self-hostable push notification service. The [`rest_command.ntfy_notify`](homeassistant/config/configuration.yaml) block in `configuration.yaml` sends alerts to the topic `halo-radar-9dfc55e71cdb` on `ntfy.sh`. To receive alerts on your phone, install the [ntfy app](https://ntfy.sh/) and subscribe to that topic.
+ntfy push uses [`rest_command.ntfy_notify`](homeassistant/config/configuration.yaml) in `configuration.yaml`, which posts to `https://ntfy.sh/halo-radar-9dfc55e71cdb` with `Priority: urgent`. Install the [ntfy app](https://ntfy.sh/) and subscribe to that topic to receive alerts on your phone.
 
 > [!TIP]
-> To use your own private ntfy topic (recommended for production), change the `url` in `configuration.yaml` under `rest_command.ntfy_notify` to your own topic URL.
+> Change the `url` under `rest_command.ntfy_notify` to your own private ntfy topic for production use.
 
 ### 5. Connecting the MPU to Home Assistant
 
-In `src/mpu_linux/main.py`, update the following constants to match your network:
+In `src/mpu_linux/main.py`, set these constants to your host machine's LAN IP:
 
 ```python
-# Thread 4 -- Event Router (src/mpu_linux/main.py)
 WEBHOOK_URL    = "http://<HA_HOST_IP>:8123/api/webhook/emergency_dispatch"
-MQTT_BROKER_IP = "<HA_HOST_IP>"   # host machine's LAN IP -- NOT 127.0.0.1
+MQTT_BROKER_IP = "<HA_HOST_IP>"
 MQTT_PORT      = 1883
 ```
 
 > [!IMPORTANT]
-> Use the **host machine's real LAN IP** (e.g. `192.168.x.x`), not `127.0.0.1`. The MPU runs in its own container and loopback will not reach the Mosquitto container.
+> Use the host machine's real LAN IP (run `hostname -I` on Linux or `ipconfig` on Windows). Do **not** use `127.0.0.1` — the MPU and Mosquitto run in separate Docker containers; loopback resolves to the calling container only.
 
-Once set, the full event flow is:
-- Every vitals reading → `eldercare/radar/heart_rate` + `eldercare/radar/breath_rate` (continuous live feed)
-- Every classifier window → `eldercare/radar/fall_probability` (continuous live feed)
-- Fall detected (`p > 0.85`) → `eldercare/radar/falls` (JSON) + webhook → HA notification + ntfy push
-- Vitals alert (sustained zero breath) → webhook → HA notification + ntfy push
+**Full event flow once configured:**
+
+| Event | MQTT | Webhook |
+|---|---|---|
+| Every valid vitals reading | `heart_rate` + `breath_rate` topics (bare float) | — |
+| Every classifier window | `fall_probability` topic (bare float, 0.0–1.0) | — |
+| Fall confirmed (`p > 0.85`) | `eldercare/radar/falls` (JSON blob) | POST → HA automation → ntfy push |
+| Breath-rate absent ≥ 15 s | — | POST → HA automation → ntfy push |
 
 ---
 
 ## ⚙️ Model Training & AI
 
-The Fall Detection model is a PyTorch-based sequence classifier (`MyCNN`).
+### Architecture
 
-### PyTorch Tensor Specifics
-The model expects a 4D input tensor formatted from the accumulated point cloud data:
-*   **Shape:** `(Batch_Size, Frames, Max_Objects, 4)`
-*   **Features (4):** Each tracked point contains `(X, Y, Z, Doppler_Velocity)`.
-*   During inference, the rolling-window tensor is gathered, padded to the maximum detected objects per frame, and passed to `fall_model.pth` to yield a binary Fall/Not-Fall prediction.
+`MyCNN` is a 2D convolutional classifier defined in `src/mpu_linux/main.py` and mirrored exactly in `model_training/notebooks/FallDetection_root.ipynb`. The two definitions must be kept in sync — the `.pth` file stores weights only (`state_dict`), not the model class. Loading requires an instantiated `MyCNN` object.
 
-*   **Notebook:** Located at `model_training/notebooks/FallDetection_root.ipynb`.
-*   **Weights:** The production weights are saved as `src/mpu_linux/fall_model.pth`.
-*   **Data:** Training datasets are stored in `model_training/data/GatheredData`.
+```
+Input: (1, 25, 22, 4)   ← (batch, frames, max_points, features)
+Conv2d(25→16, k=5, s=2, p=2) + LeakyReLU
+MaxPool2d(2, 2)
+Conv2d(16→32, k=3, s=1, p=1) + LeakyReLU
+Flatten → Linear(32×5×1=160, 64) + LeakyReLU
+Linear(64, 32) + LeakyReLU
+Linear(32, 1) → sigmoid → probability
+```
+
+All layers use `dtype=torch.float32`.
+
+### Input Tensor
+
+| Dimension | Size | Content |
+|---|---|---|
+| Batch | 1 (inference) | — |
+| Frames | 25 (`MODEL_WINDOW_FRAMES`) | Rolling window of radar frames |
+| Max Points | 22 (`MODEL_MAX_POINTS`) | Points per frame, zero-padded if fewer detected |
+| Features | 4 | `(X, Y, Z, Doppler_Velocity)` |
+
+`MODEL_MAX_POINTS = 22` must match the value used during training (the notebook's `equal_newdf` min-max object count). If retraining produces a different value, update `MODEL_MAX_POINTS` in `main.py` and recompute `fc1`'s `in_features` (`32 × H_out × W_out` after conv/pool arithmetic).
+
+### Files
+
+*   **Model weights:** `src/mpu_linux/fall_model.pth` (loaded at path `python/fall_model.pth` relative to the working directory — run `python main.py` from `src/mpu_linux/`)
+*   **Training notebook:** `model_training/notebooks/FallDetection_root.ipynb`
+*   **Training data:** `model_training/data/GatheredData/` (not tracked in git — collect using the radar + Arduino setup)
 
 ---
 
 ## 📂 Repository Structure
 
-The project has been refactored into a highly modular directory structure:
-
 ```text
 ├── docs/
-│   ├── diagrams/             # High-resolution Mermaid diagrams
+│   ├── diagrams/             # Mermaid source (.mmd) + rendered PNGs
 │   └── images/               # Hardware photos and pinout diagrams
 ├── homeassistant/
 │   ├── docker-compose.yml    # Docker stack: Home Assistant + Mosquitto
-│   ├── config/               # Home Assistant configuration (sensors, automations)
-│   └── mosquitto/
-│       └── config/           # Mosquitto broker configuration
+│   ├── config/               # Home Assistant configuration
+│   └── mosquitto/config/     # Mosquitto broker configuration
 ├── model_training/
-│   ├── data/                 # Raw datasets and pointcloud captures
-│   └── notebooks/            # Jupyter notebooks (e.g., FallDetection.ipynb)
+│   ├── data/                 # Pointcloud capture CSVs (not git-tracked)
+│   └── notebooks/            # FallDetection_root.ipynb
 └── src/
-    ├── mcu_arduino/          # STM32 / Arduino UNO Q parser sketch
-    └── mpu_linux/            # The 4-Thread Python backend application
+    ├── mcu_arduino/          # sketch.ino — TLV parser + radar config + bridge
+    └── mpu_linux/            # main.py — 4-thread Python edge application
 ```
 
 ---
