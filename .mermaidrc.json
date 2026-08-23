@@ -1,3 +1,4 @@
 {
-  "securityLevel": "loose"
+  "securityLevel": "loose",
+  "maxTextSize": 90000000
 }
