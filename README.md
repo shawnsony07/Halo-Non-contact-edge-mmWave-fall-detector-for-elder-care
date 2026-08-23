@@ -21,7 +21,7 @@ This repository contains the MCU firmware (Arduino UNO Q), the Linux edge applic
 
 ---
 
-## Radar Configuration
+## 📡 Radar Configuration
 
 <p align="center">
   <img src="docs/images/iwr-on-mmwaveicboost.png" alt="IWR6843ISK mounted on MMWAVEICBOOST" width="550"/><br/>
@@ -187,7 +187,7 @@ The system is deployed at **~2 m wall-mount height, angled down at ~15 degrees**
 
 | Parameter | Original (`vital_signs_ISK_6m.cfg`) | Deployed Value | Reason |
 |---|---|---|---|
-| `sensorPosition` | `2 0 15` (ceiling, tilted) | `2 0 15` | Matches actual wall-mount height (~2 m) and 15° downward tilt |
+| `sensorPosition` | `2 0 15` (ceiling, 2 m, 15° tilt) | `2 0 15` (unchanged — wall-mount matches vendor default) | Deployed height and tilt match the profile |
 | `boundaryBox` Ymin | `0.5` | `0.3` | Captures subjects close to the sensor baseline |
 | `maxAcceleration` | `0.1 0.1 0.1` | `2.0 2.0 2.0` | Prevents track loss on normal walking speed |
 | `stateParam` (active2freeThre) | `6` | `80` | Raises miss tolerance to ~4.4 s; prevents ID reset on momentary occlusions |
@@ -232,7 +232,7 @@ The system is deployed at **~2 m wall-mount height, angled down at ~15 degrees**
 
 <p align="center">
   <img src="docs/images/unoq.png" alt="Arduino UNO Q board" width="550"/><br/>
-  <em>Arduino UNO Q — dual-processor board with STM32H573 MCU and Linux MPU </em>
+  <em>Arduino UNO Q — dual-processor board with STM32H573 MCU and Linux MPU</em>
 </p>
 
 The Arduino UNO Q contains two processors on a single board:
@@ -625,8 +625,12 @@ All layers use `dtype=torch.float32`.
 
 ```text
 ├── docs/
-│   ├── diagrams/             # Mermaid source (.mmd) + rendered PNGs
-│   └── images/               # Hardware photos and pinout diagrams
+│   ├── diagrams/             # Mermaid source (.mmd) + rendered PNGs (architecture, wiring, etc.)
+│   └── images/               # Hardware photos, pinout diagrams, deployment photos
+│       ├── wall-mount-setup.png          # Enclosure on wall at ~2 m height
+│       ├── wall-mount-2m-15deg.png       # Full room view of 2 m / 15° wall-mount deployment
+│       ├── ti-industrial-visualizer.png  # TI Industrial Visualizer with live target detection
+│       └── ...                           # Other component and UI screenshots
 ├── homeassistant/
 │   ├── docker-compose.yml    # Docker stack: Home Assistant + Mosquitto
 │   ├── config/               # Home Assistant configuration
