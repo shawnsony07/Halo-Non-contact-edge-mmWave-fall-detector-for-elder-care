@@ -169,7 +169,7 @@ On the Linux MPU side, `main.py` opens the bridge using the `routerbridge` Pytho
 #### Option A: Arduino App Lab (Recommended)
 
 <p align="center">
-  <img src="docs/images/arduino_app_lab.png" alt="Arduino App Lab" width="550"/><br/>
+  <img src="docs/images/arduino_app_lab.png?v=1" alt="Arduino App Lab" width="800"/><br/>
   <em>Arduino App Lab interface running both sketch and Python application</em>
 </p>
 
@@ -210,7 +210,7 @@ The application prints per-thread startup confirmations. If `[Thread2] First poi
 ## 🏗️ System Architecture
 
 <p align="center">
-  <img src="docs/diagrams/architecture.png" alt="System Architecture" width="550"/><br/>
+  <img src="docs/diagrams/architecture.png?v=1" alt="System Architecture" width="550"/><br/>
   <em>System Architecture: Three-tier edge processing pipeline</em>
 </p>
 
@@ -225,7 +225,7 @@ The system has three compute tiers:
 ## 📡 Data Pipeline & Telemetry
 
 <p align="center">
-  <img src="docs/diagrams/data_flow.png" alt="Data Pipeline &amp; Telemetry" width="550"/><br/>
+  <img src="docs/diagrams/data_flow.png?v=1" alt="Data Pipeline &amp; Telemetry" width="550"/><br/>
   <em>Data Pipeline and Telemetry Flow Sequence</em>
 </p>
 
@@ -259,7 +259,7 @@ Points outside these bounds are silently dropped. Per-frame sanity limits: max 2
 ## 🧠 Linux Application MPU Architecture
 
 <p align="center">
-  <img src="docs/diagrams/process_threads.png" alt="Linux Application MPU Architecture" width="550"/><br/>
+  <img src="docs/diagrams/process_threads.png?v=1" alt="Linux Application MPU Architecture" width="550"/><br/>
   <em>Linux MPU Architecture: 4-thread daemon with non-blocking receive queues</em>
 </p>
 
