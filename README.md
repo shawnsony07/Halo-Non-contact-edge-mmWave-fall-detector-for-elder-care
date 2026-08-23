@@ -19,7 +19,7 @@ This repository contains the hardware integration, edge-processing logic, and ma
 
 ## Hardware Setup & Radar Configuration
 
-![IWR6843ISK on mmWaveICBoost](docs/images/iwr-on-mmwaveicboost.png)
+<p align="center"><img src="docs/images/iwr-on-mmwaveicboost.png" alt="IWR6843ISK on mmWaveICBoost" width="550"/></p>
 
 This project requires a Texas Instruments **IWR6843ISK** mmWave Radar mounted on the **MMWAVEICBOOST** carrier board for connecting via UART and other communication interfaces. We utilize the "Vital Signs with People Tracking" firmware to extract raw point cloud data, tracker target lists, and vital signs in a single unified data stream.
 
@@ -76,9 +76,9 @@ You have two options to send this config and view the data:
 
 ### 1. Arduino MCU Setup & Wiring
 
-![MMWAVEICBOOST](docs/images/mmwaveicboost.png)
+<p align="center"><img src="docs/images/mmwaveicboost.png" alt="MMWAVEICBOOST" width="550"/></p>
 
-![Arduino UNO Q Pinout](docs/images/Arduino-UNO-Q-pinout.png)
+<p align="center"><img src="docs/images/Arduino-UNO-Q-pinout.png" alt="Arduino UNO Q Pinout" width="550"/></p>
 
 **Hardware Connections (Arduino UNO Q to IWR6843ISK / mmWaveICBoost):**
 *   **Power & Ground:**
@@ -117,7 +117,7 @@ You have two options to send this config and view the data:
 
 The Halo system architecture is distributed across three primary compute tiers: the Radar Sensor, the Real-Time Coprocessor, and the Linux Application MPU.
 
-![System Architecture](docs/diagrams/architecture.png)
+<p align="center"><img src="docs/diagrams/architecture.png" alt="System Architecture" width="550"/></p>
 
 ### 1. Hardware Stack
 
@@ -139,7 +139,7 @@ The telemetry is formatted using Type-Length-Value (TLV) packets. The MCU implem
 2.  **Target List (Type 1010):** Returns the tracked targets, handled by the IWR6843's on-chip grouping and tracking algorithms.
 3.  **Vitals (Type 1040):** Returns pre-calculated, filtered heart rate and respiration rate values.
 
-![Data Pipeline & Telemetry](docs/diagrams/data_flow.png)
+<p align="center"><img src="docs/diagrams/data_flow.png" alt="Data Pipeline &amp; Telemetry" width="550"/></p>
 
 ### Spatial Filtering and Defensive Bounds
 
@@ -153,7 +153,7 @@ Because edge MPUs have limited resources, the MCU implements physical world cons
 
 The downstream Linux application (implemented in Python) acts as the brain of the edge device. To ensure real-time latency, it uses a 4-Thread architecture.
 
-![Linux Application MPU Architecture](docs/diagrams/process_threads.png)
+<p align="center"><img src="docs/diagrams/process_threads.png" alt="Linux Application MPU Architecture" width="550"/></p>
 
 ### Thread Breakdown
 
