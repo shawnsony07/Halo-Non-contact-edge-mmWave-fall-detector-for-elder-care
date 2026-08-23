@@ -103,9 +103,8 @@ The Arduino UNO Q (STM32 side) bridges the ICBOOST's UART headers to the Linux M
 | Arduino Pin | ICBOOST Header | Direction | Baud | Purpose |
 |---|---|---|---|---|
 | GND | J5 Pin 4 (GND) | — | — | Common ground. Required for UART signal integrity. |
-| D0 (USART1_RX) | J5 Pin 3 (RS232TX) | Radar → Arduino | 115200 | Config UART receive (CFG channel) |
-| D1 (USART1_TX) | J5 Pin 5 (RS232RX) | Arduino → Radar | 115200 | Config UART transmit (sends `.cfg` commands) |
-| RX (Hardware Serial) | J6 Pin 9 (Data TX) | Radar → Arduino | 921600 | High-speed TLV data stream |
+| D1 (USART1_TX) | J5 Pin 5 (RS232RX) | Arduino → Radar | 115200 | Config UART transmit (sends `.cfg` commands on boot) |
+| D0 (USART1_RX) | J6 Pin 9 (Data TX) | Radar → Arduino | 921600 | High-speed TLV data stream |
 
 <p align="center"><img src="docs\images\unoq-radar-wiring.png" alt="UNO Q to Radar Wiring Diagram" width="550"/></p>
 
