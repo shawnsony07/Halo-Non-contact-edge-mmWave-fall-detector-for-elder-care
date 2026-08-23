@@ -618,7 +618,6 @@ All layers use `dtype=torch.float32`.
 2. **UART corruption** — Unshielded jumper-wire connections at 921,600 baud produce occasional bit-flip errors. Per-field sanity filtering catches most cases; shortening and shielding the wires reduces the source.
 3. **Small, single-environment training set** — The model was trained on proxy falls by one person in one environment. Generalisation to other environments, body types, and movement patterns is unverified.
 4. **ntfy.sh reliability** — Free public relay with no delivery SLA. Acceptable for a demo; a real deployment should self-host or use a paid service.
-5. **CPU/RAM budget not formally profiled** — The system runs acceptably in practice on the Linux MPU, but no hard per-thread measurements have been taken.
 
 ---
 
