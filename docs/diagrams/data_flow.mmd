@@ -9,8 +9,8 @@ sequenceDiagram
         MCU->>MCU: Parse Magic Word & Packet Header
         MCU->>MCU: Validate packet-length sanity bounds
         
-        par Point Cloud (TLV 1)
-            MCU->>MCU: Extract (X, Y, Z, Velocity)
+        par Point Cloud (TLV 1 & 1020)
+            MCU->>MCU: Extract (X, Y, Z, Velocity) / Compressed
             MCU->>MCU: Bounding-box pruning
         and Target List (TLV 1010)
             MCU->>MCU: Extract Target Track Data
