@@ -230,6 +230,11 @@ The two processors communicate over an **internal UART** (not exposed externally
 | D0 (USART1_RX) | J6 Pin 9 (Data TX) | Radar → Arduino | 921600 | High-speed TLV data stream |
 
 <p align="center">
+  <img src="docs/diagrams/wiring.png" alt="Arduino UNO Q to MMWAVEICBOOST Mermaid Circuit Diagram" width="700"/><br/>
+  <em>Mermaid circuit diagram illustrating the logical UART and Ground connections between the Arduino and MMWAVEICBOOST</em>
+</p>
+
+<p align="center">
   <img src="docs/images/unoq-radar-wiring.png" alt="Arduino UNO Q to MMWAVEICBOOST UART wiring diagram" width="550"/><br/>
   <em>3-wire UART wiring: GND, D1 (TX→RS232RX), D0 (RX←Data TX) — keep wires short to minimise bit-flip corruption at 921,600 baud</em>
 </p>
