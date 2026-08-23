@@ -85,7 +85,18 @@ Vital_Signs_With_People_Tracking\chirp_configs\vital_signs_ISK_6m.cfg
 
 <p align="center"><img src="docs/images/Arduino-UNO-Q-pinout.png" alt="Arduino UNO Q Pinout" width="550"/></p>
 
-The Arduino UNO Q (STM32-based) bridges the ICBOOST's UART headers to the Linux host over USB. It parses the raw TLV binary stream from the radar and re-emits three separate structured channels over the `Arduino_RouterBridge` protocol.
+**Arduino UNO Q — Dual-Processor Architecture:**
+
+The Arduino UNO Q contains two processors on a single board:
+
+| Processor | Core | Role |
+|---|---|---|
+| STM32H573 | Cortex-M33 @ 250 MHz | Real-time MCU — runs `sketch.ino`, parses TLV, drives GPIO |
+| Linux MPU | NXP i.MX (Cortex-A) | Full Linux (Debian) — runs `python/main.py`, MQTT, inference |
+
+The two processors communicate over an **internal UART** (not exposed externally). The `Arduino_RouterBridge` library on the STM32 side multiplexes named channels over this internal UART to the Linux MPU. The Python application on the Linux MPU opens the bridge via the `routerbridge` Python package — it does **not** open an external USB serial port. The board appears to the development PC as a USB CDC device only for flashing and the Arduino App Lab debugger connection.
+
+The Arduino UNO Q (STM32 side) bridges the ICBOOST's UART headers to the Linux MPU via `Arduino_RouterBridge`. It parses the raw TLV binary stream from the radar and re-emits three separate structured channels over the internal UART bridge.
 
 **Wiring (Arduino UNO Q ↔ MMWAVEICBOOST):**
 
@@ -99,9 +110,9 @@ The Arduino UNO Q (STM32-based) bridges the ICBOOST's UART headers to the Linux 
 > [!IMPORTANT]
 > Power the ICBOOST from its dedicated 5V/3A barrel jack. Do **not** attempt to power it from the Arduino's 5V pin. The radar draws up to 3A at peak; the Arduino's regulator cannot supply this.
 
-**STM32 ↔ Linux MPU Communication:**
+**STM32 ↔ Linux MPU Communication (Internal UART Bridge):**
 
-The Arduino UNO Q runs on an STM32 Cortex-M33 core. The `sketch.ino` firmware parses the raw TLV binary from the radar and re-emits structured data to the Linux host using the `Arduino_RouterBridge` library. This library exposes a USB CDC (virtual COM port) connection that the host Python application opens as a serial device. The bridge multiplexes three named channels over that single USB connection:
+The STM32H573 core runs `sketch.ino` and communicates with the on-board Linux MPU over an **internal UART** using the `Arduino_RouterBridge` library. This is not a USB connection — the bridge is a dedicated hardware UART between the two processors on the UNO Q board. The bridge multiplexes three named channels over that single internal UART:
 
 | Channel Name | Content | Consumed by |
 |---|---|---|
@@ -109,7 +120,7 @@ The Arduino UNO Q runs on an STM32 Cortex-M33 core. The `sketch.ino` firmware pa
 | `radar_vitals` | Parsed vitals records (`<2H3f`) | Thread 3 — Vitals Consumer |
 | `radar_pointcloud` | Parsed point cloud records (`<I4f`) | Thread 2 — Activity Classifier |
 
-The `Bridge` object in `main.py` registers a callback per channel. Each callback does nothing except enqueue the raw bytes into the corresponding `queue.Queue`. No parsing happens in the callbacks — this prevents receive latency from being affected by processing time.
+On the Linux MPU side, `main.py` opens the bridge using the `routerbridge` Python package (installed via `requirements.txt`). The `Bridge` object registers one callback per channel. Each callback does nothing except enqueue the raw bytes into the corresponding `queue.Queue`. No parsing happens in the callbacks — this decouples receive latency from processing time and prevents the STM32 from stalling waiting for the Linux side to consume.
 
 **Flashing the Arduino:**
 1. Open `src/mcu_arduino/sketch.ino` in Arduino IDE.
@@ -378,6 +389,25 @@ All layers use `dtype=torch.float32`.
     ├── mcu_arduino/          # sketch.ino — TLV parser + radar config + bridge
     └── mpu_linux/            # main.py — 4-thread Python edge application
 ```
+
+---
+
+## 📚 References
+
+**Arduino UNO Q Documentation:**
+- [User Manual](https://docs.arduino.cc/tutorials/uno-q/user-manual/)
+- [Single-Board Computer (Linux MPU)](https://docs.arduino.cc/tutorials/uno-q/single-board-computer/)
+- [Power Specification](https://docs.arduino.cc/tutorials/uno-q/power-specification/)
+- [RouterBridge Multilanguage](https://docs.arduino.cc/tutorials/uno-q/routerbridge-multilanguage)
+- [Arduino App Lab & AI Coding Agents](https://docs.arduino.cc/tutorials/uno-q/ai-coding-agents)
+- [SSH Access](https://docs.arduino.cc/tutorials/uno-q/ssh/)
+- [ADB Access](https://docs.arduino.cc/tutorials/uno-q/adb)
+- [Debian Guide](https://docs.arduino.cc/tutorials/uno-q/debian-guide)
+- [Remote Access](https://docs.arduino.cc/tutorials/uno-q/remote-access)
+
+**Texas Instruments:**
+- [Radar Toolbox](https://dev.ti.com/tirex/explore/node?node=A__AEIJm0rwIeU.2P1OBWwlaA__radar_toolbox__1AslXXD__LATEST)
+- [UniFlash](https://www.ti.com/tool/UNIFLASH)
 
 ---
 *Developed for elder care environments demanding the highest degree of privacy, dignity, and reliability.*
