@@ -99,6 +99,18 @@ The Arduino UNO Q (STM32-based) bridges the ICBOOST's UART headers to the Linux 
 > [!IMPORTANT]
 > Power the ICBOOST from its dedicated 5V/3A barrel jack. Do **not** attempt to power it from the Arduino's 5V pin. The radar draws up to 3A at peak; the Arduino's regulator cannot supply this.
 
+**STM32 ↔ Linux MPU Communication:**
+
+The Arduino UNO Q runs on an STM32 Cortex-M33 core. The `sketch.ino` firmware parses the raw TLV binary from the radar and re-emits structured data to the Linux host using the `Arduino_RouterBridge` library. This library exposes a USB CDC (virtual COM port) connection that the host Python application opens as a serial device. The bridge multiplexes three named channels over that single USB connection:
+
+| Channel Name | Content | Consumed by |
+|---|---|---|
+| `radar_targets` | Parsed target-list records (`<2I3f`) | Thread 1 — Spatial Engine |
+| `radar_vitals` | Parsed vitals records (`<2H3f`) | Thread 3 — Vitals Consumer |
+| `radar_pointcloud` | Parsed point cloud records (`<I4f`) | Thread 2 — Activity Classifier |
+
+The `Bridge` object in `main.py` registers a callback per channel. Each callback does nothing except enqueue the raw bytes into the corresponding `queue.Queue`. No parsing happens in the callbacks — this prevents receive latency from being affected by processing time.
+
 **Flashing the Arduino:**
 1. Open `src/mcu_arduino/sketch.ino` in Arduino IDE.
 2. Install the `Arduino_RouterBridge` library if not already present.
@@ -107,22 +119,41 @@ The Arduino UNO Q (STM32-based) bridges the ICBOOST's UART headers to the Linux 
 
 ### 2. Linux MPU Setup
 
-The Python application requires Python 3.8+ and the `arduino` bridge package (provided by the `Arduino_RouterBridge` host library).
+#### Option A: Arduino App Lab (Recommended)
+
+<p align="center"><img src="docs/images/arduino_app_lab.png" alt="Arduino App Lab" width="550"/></p>
+
+**Arduino App Lab** is an IDE built into the Arduino UNO Q environment that runs both the STM32 sketch and the Python application simultaneously from a single project. There is no need to run them separately or manage two terminals.
+
+In App Lab, the project is structured with two top-level folders:
+- `sketch/` — contains `sketch.ino` (compiled and flashed to the STM32)
+- `python/` — contains `main.py`, `requirements.txt`, `fall_model.pth`, and runtime output files (`events.jsonl`, `pointcloud_log.csv`)
+
+To run:
+1. Open the App Lab project `radar_fall_detection`.
+2. Click **Run** (top-right). App Lab flashes the sketch to the STM32 and starts `python/main.py` on the host simultaneously.
+3. The **App launch** tab shows the STM32 flash and GDB session output. The **Python** tab shows `main.py` stdout.
+
+All output files (`events.jsonl`, `pointcloud_log.csv`) are written inside the `python/` folder.
+
+#### Option B: Standalone (without App Lab)
+
+If not using App Lab, flash `sketch.ino` separately via Arduino IDE, then:
 
 ```bash
 cd src/mpu_linux
 pip install -r requirements.txt
 ```
 
-`requirements.txt` uses `--extra-index-url https://download.pytorch.org/whl/cpu` so `torch` is pulled from TI's CPU-only wheel index. Standard PyPI packages (`requests`, `paho-mqtt`, `numpy`) resolve from the default index alongside it.
+`requirements.txt` uses `--extra-index-url https://download.pytorch.org/whl/cpu` so `torch` pulls from the CPU-only wheel index. Standard packages (`requests`, `paho-mqtt`, `numpy`) resolve from PyPI.
 
-Before running, set the serial port in `main.py` to match your Arduino's USB device path (e.g. `COM3` on Windows, `/dev/ttyACM0` on Linux). Then:
+Set the serial port in `main.py` to your Arduino's USB device path (`COM3` on Windows, `/dev/ttyACM0` on Linux), then:
 
 ```bash
 python main.py
 ```
 
-The application prints per-thread startup confirmations and a diagnostic counter every 100 pointcloud batches. If `[Thread2] First pointcloud batch received` does not appear within ~5 seconds of start, the radar is not emitting data — verify the SOP switch state and CFG_PORT connection.
+The application prints per-thread startup confirmations. If `[Thread2] First pointcloud batch received` does not appear within ~5 seconds, the radar is not emitting data — verify the SOP switch state and CFG_PORT connection.
 
 ---
 
