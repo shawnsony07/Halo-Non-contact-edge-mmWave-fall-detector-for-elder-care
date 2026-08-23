@@ -119,7 +119,7 @@ The STM32H573 core runs `sketch.ino` and communicates with the on-board Linux MP
 |---|---|---|
 | `radar_targets` | Parsed target-list records (`<2I3f`) | Thread 1 — Spatial Engine |
 | `radar_vitals` | Parsed vitals records (`<2H3f`) | Thread 3 — Vitals Consumer |
-| `radar_pointcloud` | Parsed point cloud records (`<I4f`) | Thread 2 — Activity Classifier |
+| `radar_pointcloud` | Raw/Compressed point cloud (TLV 1/1020) | Thread 2 — Activity Classifier |
 
 On the Linux MPU side, `main.py` opens the bridge using the `routerbridge` Python package (installed via `requirements.txt`). The `Bridge` object registers one callback per channel. Each callback does nothing except enqueue the raw bytes into the corresponding `queue.Queue`. No parsing happens in the callbacks — this decouples receive latency from processing time and prevents the STM32 from stalling waiting for the Linux side to consume.
 
