@@ -247,7 +247,7 @@ MQTT_PORT      = 1883
 ```
 
 > [!IMPORTANT]
-> Use the **host machine's real LAN IP** (e.g. `192.168.1.15`), not `127.0.0.1`. The MPU runs in its own container and loopback will not reach the Mosquitto container.
+> Use the **host machine's real LAN IP** (e.g. `192.168.x.x`), not `127.0.0.1`. The MPU runs in its own container and loopback will not reach the Mosquitto container.
 
 Once set, the full event flow is:
 - Every vitals reading → `eldercare/radar/heart_rate` + `eldercare/radar/breath_rate` (continuous live feed)
