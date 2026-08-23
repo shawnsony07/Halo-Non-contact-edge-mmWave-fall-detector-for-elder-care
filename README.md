@@ -107,7 +107,7 @@ The Arduino UNO Q (STM32 side) bridges the ICBOOST's UART headers to the Linux M
 | D1 (USART1_TX) | J5 Pin 5 (RS232RX) | Arduino → Radar | 115200 | Config UART transmit (sends `.cfg` commands) |
 | RX (Hardware Serial) | J6 Pin 9 (Data TX) | Radar → Arduino | 921600 | High-speed TLV data stream |
 
-<p align="center"><img src="docs/images/unoq-radar-wiring.png" alt="UNO Q to Radar Wiring Diagram" width="550"/></p>
+<p align="center"><img src="docs\images\unoq-radar-wiring.png" alt="UNO Q to Radar Wiring Diagram" width="550"/></p>
 
 > [!IMPORTANT]
 > Power the ICBOOST from its dedicated 5V/3A barrel jack. Do **not** attempt to power it from the Arduino's 5V pin. The radar draws up to 3A at peak; the Arduino's regulator cannot supply this.
