@@ -8,3 +8,9 @@ mosquitto/data/
 # Documentation and planning
 PROJECT_JOURNAL.md
 architecture.txt
+
+# Build/tool configs not needed in repo
+.mermaidrc.json
+
+# Word report files
+*.docx
