@@ -1,0 +1,13 @@
+.storage/
+.cloud/
+.cache/
+*.db
+*.db-shm
+*.db-wal
+*.log
+*.log.*
+.ha_run.lock
+.HA_VERSION
+deps/
+tts/
+blueprints/

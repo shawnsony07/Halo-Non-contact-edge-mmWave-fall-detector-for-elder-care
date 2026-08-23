@@ -22,3 +22,13 @@ mqtt:
     - name: "Fall Probability"
       state_topic: "eldercare/radar/fall_probability"
       icon: "mdi:alert-circle"
+rest_command:
+  ntfy_notify:
+    url: "https://ntfy.sh/halo-radar-9dfc55e71cdb"
+    method: POST
+    headers:
+      Title: "{{ title }}"
+      Priority: "urgent"
+      Tags: "warning"
+    payload: "{{ message }}"
+    content_type: "text/plain"

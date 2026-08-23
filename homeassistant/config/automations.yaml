@@ -1,1 +1,56 @@
-[]
+- id: 'emergency_dispatch_webhook'
+  alias: 'Radar Emergency Dispatch'
+  description: 'Receives fall_cnn and vitals_alert events posted by Thread 4 to the emergency_dispatch webhook'
+  trigger:
+    - platform: webhook
+      webhook_id: emergency_dispatch
+      allowed_methods:
+        - POST
+      local_only: false
+  action:
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: "{{ trigger.json.type == 'fall_cnn' }}"
+          sequence:
+            - service: persistent_notification.create
+              data:
+                title: "Fall Detected"
+                message: >
+                  Fall detected by radar classifier with
+                  {{ (trigger.json.probability * 100) | round(1) }}% confidence
+                  at {{ trigger.json.time | timestamp_custom('%H:%M:%S') }}.
+                notification_id: "radar_fall_{{ trigger.json.time }}"
+            - service: rest_command.ntfy_notify
+              data:
+                title: "Fall Detected"
+                message: >
+                  Fall detected with {{ (trigger.json.probability * 100) | round(1) }}%
+                  confidence at {{ trigger.json.time | timestamp_custom('%H:%M:%S') }}.
+        - conditions:
+            - condition: template
+              value_template: "{{ trigger.json.type == 'vitals_alert' }}"
+          sequence:
+            - service: persistent_notification.create
+              data:
+                title: "Vitals Alert"
+                message: >
+                  No breath rate detected for
+                  {{ trigger.json.duration_sec | round(0) }} seconds
+                  (target ID {{ trigger.json.id }}) at
+                  {{ trigger.json.time | timestamp_custom('%H:%M:%S') }}.
+                notification_id: "radar_vitals_{{ trigger.json.time }}"
+            - service: rest_command.ntfy_notify
+              data:
+                title: "Vitals Alert"
+                message: >
+                  No breath rate detected for {{ trigger.json.duration_sec | round(0) }}s
+                  (ID {{ trigger.json.id }}) at
+                  {{ trigger.json.time | timestamp_custom('%H:%M:%S') }}.
+      default:
+        - service: persistent_notification.create
+          data:
+            title: "Radar Emergency Event"
+            message: "Unrecognized event type: {{ trigger.json }}"
+            notification_id: "radar_unknown_{{ now().timestamp() }}"
+  mode: parallel
