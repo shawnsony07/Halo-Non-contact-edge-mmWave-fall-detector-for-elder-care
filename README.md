@@ -173,25 +173,48 @@ Vital_Signs_With_People_Tracking\chirp_configs\vital_signs_ISK_6m.cfg
 **Sending the config — two options:**
 
 * **Option A (GUI):** Run the Industrial Visualizer at `\tools\visualizers\Industrial_Visualizer` in the toolbox. Select the correct XDS110 COM ports, select the "Vital Signs with People Tracking" lab, load `vital_signs_ISK_6m.cfg`, and click Start.
+
+<p align="center">
+  <img src="docs/images/ti-industrial-visualizer.png" alt="TI Industrial Visualizer — 3D People Tracking, 1 target detected" width="750"/><br/>
+  <em>TI Industrial Visualizer — 3D People Tracking mode. 1 target detected (red bounding box). CLI COM 10, DATA COM 9, connected at 921,600 baud.</em>
+</p>
+
 * **Option B (Arduino sketch):** `sketch.ino` embeds the full config as a `const char* radarConfig[]` array. At boot, it sends each line over Serial1 (115200 baud) with a 5-second startup delay for radar boot time. No manual config step is required when using the Arduino.
 
 ### 5. Radar Config Tuning
 
-The default vendor config (`vital_signs_ISK_6m.cfg`) is tuned for a **ceiling-mounted**, room-scale deployment aimed at near-static elderly movement. The parameters below were retuned for the actual table-mount geometry used in development (~0.75 m height, ~0.6 m range, active test movements):
+The system is deployed at **~2 m wall-mount height, angled down at ~15 degrees** — matching the recommended geometry for real elder-care room coverage. The parameters below were tuned for this mount:
 
-| Parameter | Original | Retuned | Reason |
+| Parameter | Original (`vital_signs_ISK_6m.cfg`) | Deployed Value | Reason |
 |---|---|---|---|
-| `sensorPosition` | `2 0 15` (ceiling, tilted) | `0.75 0 0` (table, flat) | Matches real mount height and tilt |
-| `boundaryBox` Ymin | `0.5` | `0.3` | Seated distance at ~0.6 m needs lean-forward margin |
-| `maxAcceleration` | `0.1 0.1 0.1` | `2.0 2.0 2.0` | Original value dropped every track on normal walking speed |
-| `stateParam` (active2freeThre) | `6` | `80` | Raises miss tolerance to ~4.4 s; prevents ID reset on short stop-then-resume gaps |
+| `sensorPosition` | `2 0 15` (ceiling, tilted) | `2 0 15` | Matches actual wall-mount height (~2 m) and 15° downward tilt |
+| `boundaryBox` Ymin | `0.5` | `0.3` | Captures subjects close to the sensor baseline |
+| `maxAcceleration` | `0.1 0.1 0.1` | `2.0 2.0 2.0` | Prevents track loss on normal walking speed |
+| `stateParam` (active2freeThre) | `6` | `80` | Raises miss tolerance to ~4.4 s; prevents ID reset on momentary occlusions |
 
-> [!CAUTION]
-> The table-mount geometry cannot observe a real standing-to-floor fall arc — the observed Z range stays ~0–0.3 m, the same as the floor threshold. Fall detection at this mount demonstrates the *algorithm* and pipeline, not validated real-fall geometry. A genuine elder-care deployment requires the original **ceiling-mount** geometry (≥ 2 m height, tilted down) that this firmware profile was designed for.
+> [!NOTE]
+> The 2 m / 15° downward wall-mount geometry gives the radar a clear vertical arc to observe a standing-to-floor fall event — the Z range spans ~0.0 to ~2.0 m. This is the correct deployment geometry for real elder-care fall detection.
 
 ---
 
 ## 🚀 Setup and Deployment
+
+### Physical Deployment
+
+<p align="center">
+  <img src="docs/images/wall-mount-setup.png" alt="Halo wall-mount deployment — radar enclosure at ~2 m height" width="500"/><br/>
+  <em>Halo deployed at ~2 m height on a wall — the enclosure houses the IWR6843ISK on MMWAVEICBOOST and the Arduino UNO Q</em>
+</p>
+
+<p align="center">
+  <img src="docs/images/wall-mount-2m-15deg.png" alt="Full room view — Halo 2m wall-mount at 15 degrees with laptop showing live telemetry" width="600"/><br/>
+  <em>Full room view of the 2 m / 15° wall-mount deployment with live telemetry on the laptop screen</em>
+</p>
+
+> [!IMPORTANT]
+> The radar is mounted at **~2 m height, angled down at ~15 degrees**. This gives the sensor a clear line of sight to observe a full standing-to-floor fall arc, which is essential for reliable fall detection. Do **not** deploy at desk or table height — the geometry is insufficient to capture real falls.
+
+---
 
 ### 1. Arduino MCU Setup & Wiring
 
@@ -591,12 +614,11 @@ All layers use `dtype=torch.float32`.
 
 ## ⚠️ Known Limitations
 
-1. **Mount geometry** — A table/chest-level mount (≤ 1 m) cannot observe a real standing-to-floor fall arc. The observed Z range at this height (~0–0.3 m) equals the floor threshold, leaving no signal margin. A genuine elder-care deployment needs a ceiling-mount at ≥ 2 m.
-2. **No DMA UART ingestion** — Confirmed unavailable at the `.ino` sketch level on this board (`ZephyrSerial` has no `setRxBufferSize()`). Mitigated by on-device parsing and pruning; not physically eliminated.
-3. **UART corruption** — Unshielded jumper-wire connections at 921,600 baud produce occasional bit-flip errors. Per-field sanity filtering catches most cases; shortening and shielding the wires reduces the source.
-4. **Small, single-environment training set** — The model was trained on proxy falls by one person in one environment. Generalisation is unverified.
-5. **ntfy.sh reliability** — Free public relay with no delivery SLA. Acceptable for a demo; a real deployment should self-host or use a paid service.
-6. **CPU/RAM budget not formally profiled** — The system runs acceptably in practice on the Linux MPU, but no hard per-thread measurements have been taken.
+1. **No DMA UART ingestion** — Confirmed unavailable at the `.ino` sketch level on this board (`ZephyrSerial` has no `setRxBufferSize()`). Mitigated by on-device parsing and pruning; not physically eliminated.
+2. **UART corruption** — Unshielded jumper-wire connections at 921,600 baud produce occasional bit-flip errors. Per-field sanity filtering catches most cases; shortening and shielding the wires reduces the source.
+3. **Small, single-environment training set** — The model was trained on proxy falls by one person in one environment. Generalisation to other environments, body types, and movement patterns is unverified.
+4. **ntfy.sh reliability** — Free public relay with no delivery SLA. Acceptable for a demo; a real deployment should self-host or use a paid service.
+5. **CPU/RAM budget not formally profiled** — The system runs acceptably in practice on the Linux MPU, but no hard per-thread measurements have been taken.
 
 ---
 
