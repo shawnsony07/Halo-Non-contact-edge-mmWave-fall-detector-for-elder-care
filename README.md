@@ -379,6 +379,11 @@ docker compose up -d
 
 Home Assistant is available at `http://<host-ip>:8123`.
 
+<div align="center">
+  <img src="docs/images/home_assistant_dashboard.png?v=1" alt="Home Assistant Fall Detector and Vitals dashboard" width="800"/><br/>
+  <em>Home Assistant — "Fall Detector and Vitals" dashboard showing live heart rate, breath rate gauges and fall probability history</em>
+</div>
+
 ### 2. Mosquitto MQTT Broker
 
 Configured in [`mosquitto/config/mosquitto.conf`](homeassistant/mosquitto/config/mosquitto.conf):
@@ -403,6 +408,11 @@ Defined in [`config/configuration.yaml`](homeassistant/config/configuration.yaml
 | Radar Breath Rate | `eldercare/radar/breath_rate` | bpm |
 | Fall Probability | `eldercare/radar/fall_probability` | — |
 
+<div align="center">
+  <img src="docs/images/home_assistant_fall_history.png?v=1" alt="Home Assistant fall probability history timeline" width="800"/><br/>
+  <em>Home Assistant History view — fall probability sensor stream over a live test session</em>
+</div>
+
 ### 4. Emergency Dispatch Automation & ntfy Push Notifications
 
 The [`config/automations.yaml`](homeassistant/config/automations.yaml) defines the `Radar Emergency Dispatch` automation. It is triggered by HTTP POST to `/api/webhook/emergency_dispatch` (webhook ID: `emergency_dispatch`, methods: POST, `local_only: false`). It runs in `parallel` mode to handle simultaneous events.
@@ -419,6 +429,21 @@ ntfy push uses [`rest_command.ntfy_notify`](homeassistant/config/configuration.y
 
 > [!NOTE]
 > ntfy.sh is a free public relay with no delivery SLA. It was chosen over the official Home Assistant push notification service, which now requires a paid Nabu Casa subscription. For a real elder-care deployment, self-host an ntfy instance or use a service with guaranteed delivery.
+
+<div align="center">
+  <table>
+    <tr>
+      <td align="center">
+        <img src="docs/images/ntfy_fall_alerts.png?v=1" alt="ntfy phone app showing fall detection alerts" width="270"/><br/>
+        <em>ntfy — live fall alerts pushed to phone with confidence %</em>
+      </td>
+      <td align="center">
+        <img src="docs/images/home_assistant_notifications.png?v=1" alt="Home Assistant notifications panel with fall events" width="270"/><br/>
+        <em>Home Assistant — notification panel showing fall events from the radar classifier</em>
+      </td>
+    </tr>
+  </table>
+</div>
 
 ### 5. Connecting the MPU to Home Assistant
 
