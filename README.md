@@ -19,8 +19,7 @@ This repository contains the hardware integration, edge-processing logic, and ma
 
 ## Hardware Setup & Radar Configuration
 
-![IWR6843ISK](docs/images/iwr6843isk.png)
-![MMWAVEICBOOST](docs/images/mmwaveicboost.png)
+![IWR6843ISK on mmWaveICBoost](docs/images/iwr-on-mmwaveicboost.png)
 
 This project requires a Texas Instruments **IWR6843ISK** mmWave Radar mounted on the **MMWAVEICBOOST** carrier board for connecting via UART and other communication interfaces. We utilize the "Vital Signs with People Tracking" firmware to extract raw point cloud data, tracker target lists, and vital signs in a single unified data stream.
 
@@ -76,6 +75,8 @@ You have two options to send this config and view the data:
 ## 🚀 Setup and Deployment
 
 ### 1. Arduino MCU Setup & Wiring
+
+![MMWAVEICBOOST](docs/images/mmwaveicboost.png)
 
 ![Arduino UNO Q Pinout](docs/images/Arduino-UNO-Q-pinout.png)
 
