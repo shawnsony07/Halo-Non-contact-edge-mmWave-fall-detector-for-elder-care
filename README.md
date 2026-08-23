@@ -1,5 +1,6 @@
 <p align="center">
-  <img src="docs/images/logo.png" alt="Halo Logo" width="500"/>
+  <img src="docs/images/logo.png" alt="Halo Logo" width="500"/><br/>
+  <em>Halo: Privacy-First Non-Contact Edge mmWave Fall Detector</em>
 </p>
 
 # Halo: Non-Contact Edge mmWave Fall Detector for Elder Care
@@ -20,7 +21,10 @@ This repository contains the MCU firmware (Arduino UNO Q), the Linux edge applic
 
 ## Radar Configuration
 
-<p align="center"><img src="docs/images/iwr-on-mmwaveicboost.png" alt="IWR6843ISK on mmWaveICBoost" width="550"/></p>
+<p align="center">
+  <img src="docs/images/iwr-on-mmwaveicboost.png" alt="IWR6843ISK on mmWaveICBoost" width="550"/><br/>
+  <em>IWR6843ISK antenna module mounted on the MMWAVEICBOOST carrier board</em>
+</p>
 
 The IWR6843ISK antenna module must be mounted on the MMWAVEICBOOST carrier board. The ICBOOST provides the XDS110 debug/flash interface, barrel jack power input, and the RS-232 level-shifted UART headers (J5, J6) used for Arduino communication. Do not use the USB port on the green ISK antenna board for flashing or data — only the XDS110 USB port on the ICBOOST.
 
@@ -103,9 +107,15 @@ Vital_Signs_With_People_Tracking\chirp_configs\vital_signs_ISK_6m.cfg
 
 ### 1. Arduino MCU Setup & Wiring
 
-<p align="center"><img src="docs/images/mmwaveicboost.png" alt="MMWAVEICBOOST" width="550"/></p>
+<p align="center">
+  <img src="docs/images/mmwaveicboost.png" alt="MMWAVEICBOOST" width="550"/><br/>
+  <em>MMWAVEICBOOST carrier board header layout</em>
+</p>
 
-<p align="center"><img src="docs/images/Arduino-UNO-Q-pinout.png" alt="Arduino UNO Q Pinout" width="550"/></p>
+<p align="center">
+  <img src="docs/images/Arduino-UNO-Q-pinout.png" alt="Arduino UNO Q Pinout" width="550"/><br/>
+  <em>Arduino UNO Q Pinout and hardware overview</em>
+</p>
 
 **Arduino UNO Q — Dual-Processor Architecture:**
 
@@ -128,7 +138,10 @@ The Arduino UNO Q (STM32 side) bridges the ICBOOST's UART headers to the Linux M
 | D1 (USART1_TX) | J5 Pin 5 (RS232RX) | Arduino → Radar | 115200 | Config UART transmit (sends `.cfg` commands on boot) |
 | D0 (USART1_RX) | J6 Pin 9 (Data TX) | Radar → Arduino | 921600 | High-speed TLV data stream |
 
-<p align="center"><img src="docs\images\unoq-radar-wiring.png" alt="UNO Q to Radar Wiring Diagram" width="550"/></p>
+<p align="center">
+  <img src="docs/images/unoq-radar-wiring.png" alt="UNO Q to Radar Wiring Diagram" width="550"/><br/>
+  <em>Arduino UNO Q to MMWAVEICBOOST UART Wiring Diagram</em>
+</p>
 
 > [!IMPORTANT]
 > Power the ICBOOST from its dedicated 5V/3A barrel jack. Do **not** attempt to power it from the Arduino's 5V pin. The radar draws up to 3A at peak; the Arduino's regulator cannot supply this.
@@ -155,7 +168,10 @@ On the Linux MPU side, `main.py` opens the bridge using the `routerbridge` Pytho
 
 #### Option A: Arduino App Lab (Recommended)
 
-<p align="center"><img src="docs/images/arduino_app_lab.png" alt="Arduino App Lab" width="550"/></p>
+<p align="center">
+  <img src="docs/images/arduino_app_lab.png" alt="Arduino App Lab" width="550"/><br/>
+  <em>Arduino App Lab interface running both sketch and Python application</em>
+</p>
 
 **Arduino App Lab** is an IDE built into the Arduino UNO Q environment that runs both the STM32 sketch and the Python application simultaneously from a single project. There is no need to run them separately or manage two terminals.
 
@@ -193,7 +209,10 @@ The application prints per-thread startup confirmations. If `[Thread2] First poi
 
 ## 🏗️ System Architecture
 
-<p align="center"><img src="docs/diagrams/architecture.png" alt="System Architecture" width="550"/></p>
+<p align="center">
+  <img src="docs/diagrams/architecture.png" alt="System Architecture" width="550"/><br/>
+  <em>System Architecture: Three-tier edge processing pipeline</em>
+</p>
 
 The system has three compute tiers:
 
@@ -205,7 +224,10 @@ The system has three compute tiers:
 
 ## 📡 Data Pipeline & Telemetry
 
-<p align="center"><img src="docs/diagrams/data_flow.png" alt="Data Pipeline &amp; Telemetry" width="550"/></p>
+<p align="center">
+  <img src="docs/diagrams/data_flow.png" alt="Data Pipeline &amp; Telemetry" width="550"/><br/>
+  <em>Data Pipeline and Telemetry Flow Sequence</em>
+</p>
 
 The radar streams binary TLV (Type-Length-Value) packets at each frame interval. Each packet begins with an 8-byte magic word (`0x02 0x01 0x04 0x03 0x06 0x05 0x08 0x07`) followed by a 40-byte header, then one or more TLV payloads.
 
@@ -236,7 +258,10 @@ Points outside these bounds are silently dropped. Per-frame sanity limits: max 2
 
 ## 🧠 Linux Application MPU Architecture
 
-<p align="center"><img src="docs/diagrams/process_threads.png" alt="Linux Application MPU Architecture" width="550"/></p>
+<p align="center">
+  <img src="docs/diagrams/process_threads.png" alt="Linux Application MPU Architecture" width="550"/><br/>
+  <em>Linux MPU Architecture: 4-thread daemon with non-blocking receive queues</em>
+</p>
 
 The Python application uses four daemon threads. All Bridge callbacks do nothing except enqueue raw bytes into `queue.Queue` objects — parsing never blocks receive.
 
