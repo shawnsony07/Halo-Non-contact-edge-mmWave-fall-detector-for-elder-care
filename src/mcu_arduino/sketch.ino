@@ -33,7 +33,7 @@ const char *radarConfig[] = {
     "1 0",
     "staticBoundaryBox -3 3 0.3 5.5 0 3",
     "boundaryBox -4 4 0.3 6 0 3",
-    "sensorPosition 0.75 0 0",
+    "sensorPosition 2.0 0 15",
     "gatingParam 3 2 2 2 10",
     "stateParam 3 3 80 215 50 6000",
     "allocationParam 20 100 0.1 20 0.5 20",
