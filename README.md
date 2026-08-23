@@ -18,7 +18,7 @@ This repository contains the MCU firmware (Arduino UNO Q), the Linux edge applic
 
 ---
 
-## Hardware Setup & Radar Configuration
+## Radar Configuration
 
 <p align="center"><img src="docs/images/iwr-on-mmwaveicboost.png" alt="IWR6843ISK on mmWaveICBoost" width="550"/></p>
 
@@ -106,6 +106,8 @@ The Arduino UNO Q (STM32 side) bridges the ICBOOST's UART headers to the Linux M
 | D0 (USART1_RX) | J5 Pin 3 (RS232TX) | Radar → Arduino | 115200 | Config UART receive (CFG channel) |
 | D1 (USART1_TX) | J5 Pin 5 (RS232RX) | Arduino → Radar | 115200 | Config UART transmit (sends `.cfg` commands) |
 | RX (Hardware Serial) | J6 Pin 9 (Data TX) | Radar → Arduino | 921600 | High-speed TLV data stream |
+
+<p align="center"><img src="docs/images/unoq-radar-wiring.png" alt="UNO Q to Radar Wiring Diagram" width="550"/></p>
 
 > [!IMPORTANT]
 > Power the ICBOOST from its dedicated 5V/3A barrel jack. Do **not** attempt to power it from the Arduino's 5V pin. The radar draws up to 3A at peak; the Arduino's regulator cannot supply this.
