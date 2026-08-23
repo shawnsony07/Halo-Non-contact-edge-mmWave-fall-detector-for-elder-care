@@ -55,7 +55,8 @@ The radar ships with no application firmware. It must be flashed before first us
 
 Power off the board. Set the SOP and MUX switches to route UART to the XDS110 USB and enable flashing:
 
-**SOP (S1):** SOP0 ON | SOP1 OFF | SOP2 ON
+> [!IMPORTANT]
+> **SOP (S1) Switch:** `SOP0 ON` | `SOP1 OFF` | `SOP2 ON`
 
 <p align="center">
   <img src="docs/images/flashing-sop.png" alt="SOP switch configuration for Flashing Mode" width="550"/><br/>
@@ -85,7 +86,8 @@ Power off the board. Set the SOP and MUX switches to route UART to the XDS110 US
 
 Power off. Set the switches to route UART to the hardware headers and enable normal operation:
 
-**SOP (S1):** SOP0 ON | SOP1 OFF | SOP2 OFF
+> [!IMPORTANT]
+> **SOP (S1) Switch:** `SOP0 ON` | `SOP1 OFF` | `SOP2 OFF`
 
 <p align="center">
   <img src="docs/images/functional-sop.png" alt="SOP switch configuration for Functional Mode" width="550"/><br/>
